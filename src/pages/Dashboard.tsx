@@ -754,7 +754,7 @@ export default function Dashboard() {
     }
   };
 
-  // PROCESSAMENTO DE ARQUIVOS EXCEL EM BINÁRIO COM MAPEAMENTO INTELIGENTE DE COLUNAS
+  // PROCESSAMENTO DE ARQUIVOS EXCEL/CSV EM BINÁRIO COM MAPEAMENTO INTELIGENTE DE COLUNAS
   const handleProcessarArquivoEmMassa = (e: React.ChangeEvent<HTMLInputElement>, destino: 'producoes' | 'relatorios') => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
@@ -792,19 +792,20 @@ export default function Dashboard() {
               return '';
             };
 
-            const catBruta = String(buscarValor(['categoria_producao', 'categoria', 'tipo de producao', 'categoria de publicacao']) || '');
+            const catBruta = String(buscarValor(['categoria de publicacao', 'categoria', 'categoria_producao', 'tipo de producao']) || '');
             const cat = catBruta.toLowerCase().includes('congresso') || catBruta.toLowerCase().includes('resumo') ? 'Congresso' : 'Periódico';
 
             return {
+              id: crypto.randomUUID(), // <--- CHAVE PRIMÁRIA ÚNICA ADICIONADA AQUI
               categoria_producao: cat,
-              tipo_producao: String(buscarValor(['tipo_producao', 'tipo especifico', 'tipo']) || (cat === 'Periódico' ? 'Artigo Científico' : 'Resumo Expandido')),
-              titulo: String(buscarValor(['titulo', 'nome do trabalho', 'artigo', 'titulo do trabalho']) || 'Sem Título'),
-              evento_ou_revista: String(buscarValor(['evento_ou_revista', 'revista', 'periodico', 'evento', 'congresso', 'nome do evento']) || 'N/A'),
-              autor_principal: String(buscarValor(['autor_principal', 'autor principal', 'autor']) || 'GETECC'),
-              coautores: String(buscarValor(['coautores', 'co-autores', 'coautor']) || ''),
-              ano_publicacao: String(buscarValor(['ano_publicacao', 'ano de publicacao', 'ano', 'ano publicacao']) || '2026'),
-              qualis_doi: String(buscarValor(['qualis_doi', 'qualis', 'doi', 'qualis/doi']) || 'N/A'),
               status: String(buscarValor(['status', 'situacao']) || 'Publicado'),
+              titulo: String(buscarValor(['titulo do trabalho', 'titulo', 'nome do trabalho', 'artigo']) || 'Sem Título'),
+              tipo_producao: String(buscarValor(['tipo especifico', 'tipo_producao', 'tipo']) || (cat === 'Periódico' ? 'Artigo Científico' : 'Resumo Expandido')),
+              evento_ou_revista: String(buscarValor(['periodico / nome do evento', 'periodico', 'revista', 'evento', 'congresso', 'nome do evento']) || 'N/A'),
+              autor_principal: String(buscarValor(['autor', 'autor_principal', 'autor principal']) || 'GETECC'),
+              coautores: String(buscarValor(['coautores', 'co-autores', 'coautor']) || ''),
+              ano_publicacao: String(buscarValor(['ano de publicacao', 'ano_publicacao', 'ano']) || '2026'),
+              qualis_doi: String(buscarValor(['qualis / doi', 'qualis_doi', 'qualis', 'doi']) || 'N/A'),
             };
           });
 
@@ -813,11 +814,11 @@ export default function Dashboard() {
           alert(`Importação concluída! ${dadosLimpos.length} produções salvas no Supabase.`);
         } else {
           const importados = linhasBrutas.map((linha) => ({
-            congresso: sanitizar(linha.congresso || linha.Congresso || 'Congresso Acadêmico'),
-            autor: sanitizar(linha.autor || linha.Autor || 'Autor Principal'),
-            titulo: sanitizar(linha.titulo || linha.Titulo || 'Título do Trabalho'),
-            coautores: sanitizar(linha.coautores || linha.Coautores || ''),
-            ano: sanitizar(linha.ano || linha.Ano || '2026'),
+            congresso: sanitizar(linha['Periódico / Nome do Evento'] || linha.congresso || linha.Congresso || 'Congresso Acadêmico'),
+            autor: sanitizar(linha['Autor'] || linha.autor || linha.Autor || 'Autor Principal'),
+            titulo: sanitizar(linha['Título do Trabalho'] || linha.titulo || linha.Titulo || 'Título do Trabalho'),
+            coautores: sanitizar(linha['Coautores'] || linha.coautores || ''),
+            ano: sanitizar(linha['Ano de Publicação'] || linha.ano || linha.Ano || '2026'),
           }));
           setBaseImportadaEventos((prev) => [...importados, ...prev]);
           alert(`Sucesso! ${importados.length} registros somados à base cumulativa.`);
@@ -843,7 +844,7 @@ export default function Dashboard() {
       if (cols.length >= 3) {
         const cat = (cols[0]?.trim().toLowerCase().includes('congresso') ? 'Congresso' : 'Periódico') as 'Periódico' | 'Congresso';
         novasProds.push({
-          id: String(Date.now() + Math.random()),
+          id: crypto.randomUUID(),
           categoria_producao: cat,
           tipo_producao: cols[1]?.trim() || (cat === 'Periódico' ? 'Artigo Científico' : 'Resumo Expandido'),
           titulo: cols[2]?.trim() || 'Título Importado',
@@ -2516,162 +2517,474 @@ export default function Dashboard() {
 
         </main>
       </div>
+// ==========================================
+  // FUNÇÕES DE SALVAMENTO NO SUPABASE PARA TODOS OS MÓDULOS
+  // ==========================================
 
-{/* 3. MODAIS DE CADASTRO E EDIÇÃO DO SISTEMA */}
+  const salvarMembro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMembro.id || crypto.randomUUID();
+    const payload: Membro = {
+      id,
+      matricula: formMembro.matricula || '',
+      nome_completo: formMembro.nome_completo || '',
+      foto_dataurl: formMembro.foto_dataurl || '',
+      cpf: formMembro.cpf || '',
+      email_institucional: formMembro.email_institucional || '',
+      email_alternativo: formMembro.email_alternativo || '',
+      instagram: formMembro.instagram || '',
+      orcid_link: formMembro.orcid_link || '',
+      lattes_link: formMembro.lattes_link || '',
+      endereco: formMembro.endereco || '',
+      financiamento: formMembro.financiamento || '',
+      telefone: formMembro.telefone || '',
+      curso_formacao: formMembro.curso_formacao || '',
+      instituicao: formMembro.instituicao || '',
+      categoria: formMembro.categoria || 'Pesquisadores',
+      funcao_cargo: formMembro.funcao_cargo || '',
+      data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
+      data_desligamento: formMembro.data_desligamento || '',
+      situacao: formMembro.situacao || 'Ativo',
+      historico_afastamentos: formMembro.historico_afastamentos || [],
+    };
 
-      {/* MODAL: DEFINIR META ANUAL */}
-      {modalAtivo === 'cadastrarMeta' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">⚙️ Definir Meta Anual de Produção Científica</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const novaMeta = {
-                  ano: formMetaAnual.ano || '2026',
-                  meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
-                  meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
-                  meta_resumos: Number(formMetaAnual.meta_resumos || 0),
-                };
-                const { error } = await supabase.from('metas_anuais').upsert(novaMeta);
-                if (error) throw error;
+    try {
+      const { error } = await supabase.from('membros').upsert(payload);
+      if (error) throw error;
 
-                setMetasAnuais(prev => {
-                  const idx = prev.findIndex(m => m.ano === novaMeta.ano);
-                  if (idx >= 0) {
-                    const copia = [...prev];
-                    copia[idx] = novaMeta;
-                    return copia;
-                  }
-                  return [...prev, novaMeta];
-                });
+      if (formMembro.id) {
+        setMembros(membros.map((m) => (m.id === id ? payload : m)));
+      } else {
+        setMembros([...membros, payload]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Membro', 'Membros', `Membro ${payload.nome_completo} salvo no Supabase`);
+    } catch (err: any) {
+      alert(`Erro ao salvar membro: ${err.message || err}`);
+    }
+  };
 
-                setModalAtivo(null);
-                registrarAuditoria('Definição de Meta Anual', 'Produções', `Meta definida para o ano ${novaMeta.ano}`);
-                alert('Meta anual salva com sucesso no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar meta: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
-              <div>
-                <label className="block mb-1">Ano de Referência:</label>
-                <input type="text" required value={formMetaAnual.ano || '2026'} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, ano: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Meta de Artigos Produzidos:</label>
-                <input type="number" min="0" required value={formMetaAnual.meta_artigos_produzidos || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_artigos_produzidos: Number(e.target.value) })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Meta de Artigos Publicados:</label>
-                <input type="number" min="0" required value={formMetaAnual.meta_artigos_publicados || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_artigos_publicados: Number(e.target.value) })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Meta de Resumos em Congressos:</label>
-                <input type="number" min="0" required value={formMetaAnual.meta_resumos || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_resumos: Number(e.target.value) })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Meta</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+  const salvarAfastamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formMembro.id) return;
 
-      {/* MODAL: CADASTRAR / EDITAR MEMBRO */}
+    const novoAfastamento: RegistroAfastamento = {
+      id: crypto.randomUUID(),
+      tipo: formAfastamento.tipo || 'Licença',
+      data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
+      data_fim: formAfastamento.data_fim || '',
+      motivo: formAfastamento.motivo || '',
+    };
+
+    const historicoAtualizado = [...(formMembro.historico_afastamentos || []), novoAfastamento];
+    const membroAtualizado: Membro = {
+      ...(formMembro as Membro),
+      situacao: 'Em Afastamento/Licença',
+      historico_afastamentos: historicoAtualizado,
+    };
+
+    try {
+      const { error } = await supabase.from('membros').upsert(membroAtualizado);
+      if (error) throw error;
+
+      setMembros(membros.map((m) => (m.id === formMembro.id ? membroAtualizado : m)));
+      setModalAtivo(null);
+      setFormAfastamento({});
+      registrarAuditoria('Registrar Licença', 'Membros', `Ausência registrada para ${formMembro.nome_completo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar licença: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaborador = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaborador.id || crypto.randomUUID();
+    const item: ColaboradorExterno = {
+      id,
+      nome: formColaborador.nome || '',
+      cpf: formColaborador.cpf || '',
+      titulacao: formColaborador.titulacao || 'Doutor',
+      email: formColaborador.email || '',
+      orcid: formColaborador.orcid || '',
+      numero_conselho: formColaborador.numero_conselho || '',
+      afiliacao: formColaborador.afiliacao || '',
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores').upsert(item);
+      if (error) throw error;
+
+      if (formColaborador.id) {
+        setColaboradores(colaboradores.map((c) => (c.id === id ? item : c)));
+      } else {
+        setColaboradores([...colaboradores, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador', 'Colaboradores', `Colaborador Externo ${item.nome} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaboradorFinanceiro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaboradorFinanceiro.id || crypto.randomUUID();
+    const item: ColaboradorFinanceiro = {
+      id,
+      nome: formColaboradorFinanceiro.nome || '',
+      cpf: formColaboradorFinanceiro.cpf || '',
+      titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
+      email: formColaboradorFinanceiro.email || '',
+      orcid: formColaboradorFinanceiro.orcid || '',
+      numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
+      afiliacao: formColaboradorFinanceiro.afiliacao || '',
+      evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
+      valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
+      status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
+      data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores_financeiros').upsert(item);
+      if (error) throw error;
+
+      if (formColaboradorFinanceiro.id) {
+        setColaboradoresFinanceiros(colaboradoresFinanceiros.map((cf) => (cf.id === id ? item : cf)));
+      } else {
+        setColaboradoresFinanceiros([...colaboradoresFinanceiros, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador Financeiro', 'Colaboradores', `Aba 3: ${item.nome} (${item.evento_ou_artigo})`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador financeiro: ${err.message || err}`);
+    }
+  };
+
+  const salvarMovimentacao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMovimentacao.id || crypto.randomUUID();
+    const item: MovimentacaoFinanceira = {
+      id,
+      descricao: formMovimentacao.descricao || '',
+      valor: Number(formMovimentacao.valor || 0),
+      tipo: formMovimentacao.tipo || 'Entrada',
+      categoria: formMovimentacao.categoria || 'Outros',
+      data: formMovimentacao.data || new Date().toISOString().split('T')[0],
+      membro_id: formMovimentacao.membro_id,
+      membro_nome: formMovimentacao.membro_nome,
+      observacoes: formMovimentacao.observacoes,
+    };
+
+    try {
+      const { error } = await supabase.from('movimentacoes').upsert(item);
+      if (error) throw error;
+
+      if (formMovimentacao.id) {
+        setMovimentacoes(movimentacoes.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMovimentacoes([...movimentacoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Lançamento Caixa', 'Financeiro', `Caixa: ${item.tipo} - R$ ${item.valor}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar caixa: ${err.message || err}`);
+    }
+  };
+
+  const salvarProjeto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProjeto.id || crypto.randomUUID();
+    const docentesArr = formDocentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+    const discentesArr = formDiscentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+
+    const item: ProjetoPesquisa = {
+      id,
+      titulo: formProjeto.titulo || '',
+      coordenador: formProjeto.coordenador || '',
+      linha_pesquisa: formProjeto.linha_pesquisa || '',
+      docentes: docentesArr,
+      discentes: discentesArr,
+      parecer_cep: formProjeto.parecer_cep || '',
+      caee_cep: formProjeto.caee_cep || '',
+      financiamento: formProjeto.financiamento || '',
+      observacoes: formProjeto.observacoes || '',
+      status: formProjeto.status || 'Em aberto',
+      artigos_derivados: formProjeto.artigos_derivados || [],
+      anexos: formProjeto.anexos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('projetos').upsert(item);
+      if (error) throw error;
+
+      if (formProjeto.id) {
+        setProjetos(projetos.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProjetos([...projetos, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Projeto', 'Projetos', `Projeto: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar projeto: ${err.message || err}`);
+    }
+  };
+
+  const adicionarArtigoDerivadoNoProjeto = () => {
+    if (!formArtigoDerivado.titulo || !formArtigoDerivado.revista) {
+      alert('Preencha pelo menos o título e a revista do artigo derivado.');
+      return;
+    }
+    const novoArtigo: ArtigoDerivado = {
+      id: crypto.randomUUID(),
+      titulo: formArtigoDerivado.titulo || '',
+      revista: formArtigoDerivado.revista || '',
+      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
+      status: formArtigoDerivado.status || 'em produção',
+      anexos: formArtigoDerivado.anexos || [],
+    };
+
+    setFormProjeto({
+      ...formProjeto,
+      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArtigo],
+    });
+    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
+  };
+
+  const salvarDemanda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formDemanda.id || crypto.randomUUID();
+    const item: Demanda = {
+      id,
+      codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
+      titulo: formDemanda.titulo || '',
+      descricao: formDemanda.descricao || '',
+      responsavel_nome: formDemanda.responsavel_nome || '',
+      prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
+      prioridade: formDemanda.prioridade || 'Média',
+      status: formDemanda.status || 'Em andamento',
+      anexos: formDemanda.anexos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('demandas').upsert(item);
+      if (error) throw error;
+
+      if (formDemanda.id) {
+        setDemandas(demandas.map((d) => (d.id === id ? item : d)));
+      } else {
+        setDemandas([...demandas, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Demanda', 'Demandas', `Demanda ${item.codigo}: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar demanda: ${err.message || err}`);
+    }
+  };
+
+  const salvarProducao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProducao.id || crypto.randomUUID();
+    const item: ProducaoCientifica = {
+      id,
+      categoria_producao: formProducao.categoria_producao || 'Periódico',
+      tipo_producao: formProducao.tipo_producao || 'Artigo Científico',
+      titulo: formProducao.titulo || '',
+      evento_ou_revista: formProducao.evento_ou_revista || '',
+      autor_principal: formProducao.autor_principal || '',
+      coautores: formProducao.coautores || '',
+      ano_publicacao: formProducao.ano_publicacao || '2026',
+      qualis_doi: formProducao.qualis_doi || 'N/A',
+      status: formProducao.status || 'Publicado',
+    };
+
+    try {
+      const { error } = await supabase.from('producoes').upsert(item);
+      if (error) throw error;
+
+      if (formProducao.id) {
+        setProducoes(producoes.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProducoes([...producoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Produção', 'Produções', `Produção: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar produção: ${err.message || err}`);
+    }
+  };
+
+  const salvarMetaAnual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item: MetaAnualProducao = {
+      ano: formMetaAnual.ano || '2026',
+      meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
+      meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
+      meta_resumos: Number(formMetaAnual.meta_resumos || 0),
+    };
+
+    try {
+      const { error } = await supabase.from('metas_anuais').upsert(item);
+      if (error) throw error;
+
+      const idx = metasAnuais.findIndex((m) => m.ano === item.ano);
+      if (idx >= 0) {
+        const copy = [...metasAnuais];
+        copy[idx] = item;
+        setMetasAnuais(copy);
+      } else {
+        setMetasAnuais([...metasAnuais, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Meta Anual', 'Produções', `Meta para o ano ${item.ano} salva`);
+    } catch (err: any) {
+      alert(`Erro ao salvar meta anual: ${err.message || err}`);
+    }
+  };
+
+  const salvarReuniao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formReuniao.id || crypto.randomUUID();
+    const listaPresencas = membrosAtivos.map((m) => ({
+      membro_id: m.id,
+      membro_nome: m.nome_completo,
+      status: presencasChamada[m.id] || 'presente',
+    }));
+
+    const item: ReuniaoCientifica = {
+      id,
+      titulo: formReuniao.titulo || 'Encontro Científico',
+      data: formReuniao.data || new Date().toISOString().split('T')[0],
+      horario: formReuniao.horario || '19:00',
+      pauta: formReuniao.pauta || '',
+      presencas: listaPresencas,
+    };
+
+    try {
+      const { error } = await supabase.from('reunioes').upsert(item);
+      if (error) throw error;
+
+      if (formReuniao.id) {
+        setReunioes(reunioes.map((r) => (r.id === id ? item : r)));
+      } else {
+        setReunioes([...reunioes, item]);
+      }
+      setModalAtivo(null);
+      setPresencasChamada({});
+      registrarAuditoria('Salvar Reunião', 'Reuniões', `Reunião ${item.titulo} registrada`);
+    } catch (err: any) {
+      alert(`Erro ao salvar reunião: ${err.message || err}`);
+    }
+  };
+
+  const salvarPatrimonio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formPatrimonio.id || crypto.randomUUID();
+    const item: PatrimonioProduto = {
+      id,
+      nome: formPatrimonio.nome || '',
+      descricao: formPatrimonio.descricao || '',
+      quantidade: Number(formPatrimonio.quantidade || 1),
+      foto_dataurl: formPatrimonio.foto_dataurl || '',
+      estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
+      responsavel: formPatrimonio.responsavel || '',
+    };
+
+    try {
+      const { error } = await supabase.from('patrimonio').upsert(item);
+      if (error) throw error;
+
+      if (formPatrimonio.id) {
+        setPatrimonio(patrimonio.map((p) => (p.id === id ? item : p)));
+      } else {
+        setPatrimonio([...patrimonio, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Patrimônio', 'Patrimônio', `Item: ${item.nome}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar patrimônio: ${err.message || err}`);
+    }
+  };
+
+  const salvarMarketing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMarketing.id || crypto.randomUUID();
+    const item: MarketingItem = {
+      id,
+      titulo: formMarketing.titulo || '',
+      canal: formMarketing.canal || 'Instagram',
+      responsavel: formMarketing.responsavel || '',
+      data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
+      status: formMarketing.status || 'Ideia',
+      legenda: formMarketing.legenda || '',
+      artes: formMarketing.artes || [],
+    };
+
+    try {
+      const { error } = await supabase.from('marketing').upsert(item);
+      if (error) throw error;
+
+      if (formMarketing.id) {
+        setMarketing(marketing.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMarketing([...marketing, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Marketing', 'Marketing', `Ação: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar mídia: ${err.message || err}`);
+    }
+  };
+
+  return (
+    <>
+      {/* ==========================================
+          MODAIS SOBREPOSTOS DO SISTEMA (OVERLAYS)
+          ========================================== */}
+
+      {/* MODAL 1: MEMBRO */}
       {modalAtivo === 'membro' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">👥 {formMembro.id ? 'Editar Cadastro de Membro' : 'Novo Membro do GETECC'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formMembro.id || String(Date.now());
-                const registro: Membro = {
-                  id: idFinal,
-                  matricula: formMembro.matricula || '',
-                  nome_completo: formMembro.nome_completo || '',
-                  foto_dataurl: formMembro.foto_dataurl,
-                  cpf: formMembro.cpf || '',
-                  email_institucional: formMembro.email_institucional || '',
-                  email_alternativo: formMembro.email_alternativo,
-                  instagram: formMembro.instagram,
-                  orcid_link: formMembro.orcid_link,
-                  lattes_link: formMembro.lattes_link,
-                  endereco: formMembro.endereco,
-                  financiamento: formMembro.financiamento,
-                  telefone: formMembro.telefone,
-                  curso_formacao: formMembro.curso_formacao || '',
-                  instituicao: formMembro.instituicao || '',
-                  categoria: formMembro.categoria || 'Pesquisadores',
-                  funcao_cargo: formMembro.funcao_cargo || '',
-                  data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
-                  data_desligamento: formMembro.data_desligamento,
-                  situacao: formMembro.situacao || 'Ativo',
-                  historico_afastamentos: formMembro.historico_afastamentos || [],
-                };
-
-                const { error } = await supabase.from('membros').upsert(registro);
-                if (error) throw error;
-
-                if (formMembro.id) {
-                  setMembros(membros.map(m => m.id === formMembro.id ? registro : m));
-                } else {
-                  setMembros([...membros, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Membro', 'Membros', `Membro ${registro.nome_completo} salvo`);
-                alert('Membro salvo com sucesso no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar membro: ${err.message || err}`);
-              }
-            }} className="space-y-4 text-xs font-bold text-slate-900">
-              
-              <div className="flex items-center space-x-4 bg-slate-50 p-3 rounded border">
-                <img src={formMembro.foto_dataurl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-red-600" />
+          <div className="bg-white rounded-lg border border-slate-300 max-w-3xl w-full p-6 space-y-4 my-8 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formMembro.id ? 'Editar Integrante do GETECC' : 'Cadastrar Novo Integrante'}
+            </h2>
+            <form onSubmit={salvarMembro} className="space-y-4 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block mb-1 font-black">Foto do Perfil:</label>
-                  <input type="file" accept="image/*" onChange={handleUploadFotoMembro} className="text-xs" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1">Nome Completo:*</label>
-                  <input type="text" required value={formMembro.nome_completo || ''} onChange={(e) => setFormMembro({ ...formMembro, nome_completo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Matrícula:</label>
+                  <input type="text" required value={formMembro.matricula || ''} onChange={(e) => setFormMembro({ ...formMembro, matricula: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Matrícula:*</label>
-                  <input type="text" required value={formMembro.matricula || ''} onChange={(e) => setFormMembro({ ...formMembro, matricula: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Nome Completo:</label>
+                  <input type="text" required value={formMembro.nome_completo || ''} onChange={(e) => setFormMembro({ ...formMembro, nome_completo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">CPF:*</label>
-                  <input type="text" required value={formMembro.cpf || ''} onChange={(e) => setFormMembro({ ...formMembro, cpf: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">CPF:</label>
+                  <input type="text" required value={formMembro.cpf || ''} onChange={(e) => setFormMembro({ ...formMembro, cpf: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Telefone / WhatsApp:</label>
-                  <input type="text" value={formMembro.telefone || ''} onChange={(e) => setFormMembro({ ...formMembro, telefone: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">E-mail Institucional:*</label>
-                  <input type="email" required value={formMembro.email_institucional || ''} onChange={(e) => setFormMembro({ ...formMembro, email_institucional: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">E-mail Institucional:</label>
+                  <input type="email" required value={formMembro.email_institucional || ''} onChange={(e) => setFormMembro({ ...formMembro, email_institucional: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
                   <label className="block mb-1">E-mail Alternativo:</label>
-                  <input type="email" value={formMembro.email_alternativo || ''} onChange={(e) => setFormMembro({ ...formMembro, email_alternativo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <input type="email" value={formMembro.email_alternativo || ''} onChange={(e) => setFormMembro({ ...formMembro, email_alternativo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Curso / Formação:*</label>
-                  <input type="text" required value={formMembro.curso_formacao || ''} onChange={(e) => setFormMembro({ ...formMembro, curso_formacao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Instagram:</label>
+                  <input type="text" value={formMembro.instagram || ''} onChange={(e) => setFormMembro({ ...formMembro, instagram: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Instituição de Ensino:*</label>
-                  <input type="text" required value={formMembro.instituicao || ''} onChange={(e) => setFormMembro({ ...formMembro, instituicao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Curso / Formação:</label>
+                  <input type="text" required value={formMembro.curso_formacao || ''} onChange={(e) => setFormMembro({ ...formMembro, curso_formacao: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Categoria:*</label>
-                  <select value={formMembro.categoria || 'Pesquisadores'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Instituição:</label>
+                  <input type="text" required value={formMembro.instituicao || ''} onChange={(e) => setFormMembro({ ...formMembro, instituicao: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Categoria:</label>
+                  <select value={formMembro.categoria || 'Pesquisadores'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Coordenação">Coordenação</option>
                     <option value="Diretoria">Diretoria</option>
                     <option value="Pesquisadores">Pesquisadores</option>
@@ -2680,173 +2993,90 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">Função / Cargo:*</label>
-                  <input type="text" required value={formMembro.funcao_cargo || ''} onChange={(e) => setFormMembro({ ...formMembro, funcao_cargo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Função / Cargo:</label>
+                  <input type="text" required value={formMembro.funcao_cargo || ''} onChange={(e) => setFormMembro({ ...formMembro, funcao_cargo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Data de Ingresso:*</label>
-                  <input type="date" required value={formMembro.data_ingresso || ''} onChange={(e) => setFormMembro({ ...formMembro, data_ingresso: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data de Ingresso:</label>
+                  <input type="date" required value={formMembro.data_ingresso || ''} onChange={(e) => setFormMembro({ ...formMembro, data_ingresso: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Data de Desligamento (se houver):</label>
-                  <input type="date" value={formMembro.data_desligamento || ''} onChange={(e) => setFormMembro({ ...formMembro, data_desligamento: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">Situação no Grupo:*</label>
-                  <select value={formMembro.situacao || 'Ativo'} onChange={(e) => setFormMembro({ ...formMembro, situacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Situação:</label>
+                  <select value={formMembro.situacao || 'Ativo'} onChange={(e) => setFormMembro({ ...formMembro, situacao: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Ativo">Ativo</option>
                     <option value="Desligado">Desligado</option>
                     <option value="Em Afastamento/Licença">Em Afastamento/Licença</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block mb-1">Financiamento / Bolsa:</label>
-                  <input type="text" value={formMembro.financiamento || ''} onChange={(e) => setFormMembro({ ...formMembro, financiamento: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: CNPq, FAPESQ, Voluntário" />
-                </div>
-                <div>
-                  <label className="block mb-1">Instagram (@usuario):</label>
-                  <input type="text" value={formMembro.instagram || ''} onChange={(e) => setFormMembro({ ...formMembro, instagram: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">Link ORCID:</label>
-                  <input type="url" value={formMembro.orcid_link || ''} onChange={(e) => setFormMembro({ ...formMembro, orcid_link: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block mb-1">Link Currículo Lattes:</label>
-                  <input type="url" value={formMembro.lattes_link || ''} onChange={(e) => setFormMembro({ ...formMembro, lattes_link: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block mb-1">Endereço Residencial:</label>
-                  <input type="text" value={formMembro.endereco || ''} onChange={(e) => setFormMembro({ ...formMembro, endereco: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Membro</button>
+              <div>
+                <label className="block mb-1">Foto de Perfil:</label>
+                <input type="file" accept="image/*" onChange={handleUploadFotoMembro} className="w-full border p-1 rounded" />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t">
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 border rounded text-slate-700">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Integrante</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: REGISTRAR AFASTAMENTO / LICENÇA DE MEMBRO */}
-      {modalAtivo === 'afastamento' && formMembro && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🏥 Registrar Ausência / Licença: {formMembro.nome_completo}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const novoAfastamento: RegistroAfastamento = {
-                  id: String(Date.now()),
-                  tipo: formAfastamento.tipo || 'Licença Médica',
-                  data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
-                  data_fim: formAfastamento.data_fim || new Date().toISOString().split('T')[0],
-                  motivo: formAfastamento.motivo || '',
-                };
-
-                const membroAtualizado: Membro = {
-                  ...formMembro as Membro,
-                  situacao: 'Em Afastamento/Licença',
-                  historico_afastamentos: [...(formMembro.historico_afastamentos || []), novoAfastamento],
-                };
-
-                const { error } = await supabase.from('membros').upsert(membroAtualizado);
-                if (error) throw error;
-
-                setMembros(membros.map(m => m.id === membroAtualizado.id ? membroAtualizado : m));
-                setModalAtivo(null);
-                setFormAfastamento({});
-                registrarAuditoria('Registro de Afastamento', 'Membros', `Licença registrada para ${membroAtualizado.nome_completo}`);
-                alert('Afastamento registrado com sucesso!');
-              } catch (err: any) {
-                alert(`Erro ao registrar afastamento: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
+      {/* MODAL 2: AFASTAMENTO / LICENÇA */}
+      {modalAtivo === 'afastamento' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Registrar Ausência / Licença</h2>
+            <form onSubmit={salvarAfastamento} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Tipo de Ausência:*</label>
-                <select value={formAfastamento.tipo || 'Licença Médica'} onChange={(e) => setFormAfastamento({ ...formAfastamento, tipo: e.target.value })} className="w-full border p-2 rounded bg-slate-50">
-                  <option value="Licença Médica">Licença Médica</option>
-                  <option value="Licença Maternidade/Paternidade">Licença Maternidade/Paternidade</option>
-                  <option value="Intercâmbio / Mobilidade">Intercâmbio / Mobilidade</option>
-                  <option value="Licença Capacitação">Licença Capacitação</option>
-                  <option value="Outros">Outros</option>
-                </select>
+                <label className="block mb-1">Tipo de Afastamento:</label>
+                <input type="text" required placeholder="Ex: Licença Médica, Intercâmbio" value={formAfastamento.tipo || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, tipo: e.target.value })} className="w-full border p-2 rounded" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block mb-1">Data Início:</label>
+                  <input type="date" required value={formAfastamento.data_inicio || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, data_inicio: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Data Fim:</label>
+                  <input type="date" required value={formAfastamento.data_fim || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, data_fim: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
               </div>
               <div>
-                <label className="block mb-1">Data de Início:*</label>
-                <input type="date" required value={formAfastamento.data_inicio || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, data_inicio: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Data de Término (Previsão):*</label>
-                <input type="date" required value={formAfastamento.data_fim || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, data_fim: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Motivo / Observações:*</label>
-                <textarea rows={3} required value={formAfastamento.motivo || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, motivo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Descreva brevemente o motivo..." />
+                <label className="block mb-1">Motivo / Observações:</label>
+                <textarea rows={3} required value={formAfastamento.motivo || ''} onChange={(e) => setFormAfastamento({ ...formAfastamento, motivo: e.target.value })} className="w-full border p-2 rounded" />
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Gravar Ausência</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-amber-700 text-white font-black rounded hover:bg-amber-800">Confirmar Ausência</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: COLABORADOR FINANCEIRO & PUBLICAÇÃO (ABA 3) */}
-      {modalAtivo === 'colaboradorFinanceiro' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🤝 {formColaboradorFinanceiro.id ? 'Editar Colaborador Financeiro' : 'Cadastrar Colaborador / Adquirição'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formColaboradorFinanceiro.id || String(Date.now());
-                const registro: ColaboradorFinanceiro = {
-                  id: idFinal,
-                  nome: formColaboradorFinanceiro.nome || '',
-                  cpf: formColaboradorFinanceiro.cpf || '',
-                  titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
-                  email: formColaboradorFinanceiro.email || '',
-                  orcid: formColaboradorFinanceiro.orcid || '',
-                  numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
-                  afiliacao: formColaboradorFinanceiro.afiliacao || '',
-                  evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
-                  valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
-                  status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
-                  data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
-                };
-
-                const { error } = await supabase.from('colaboradores_financeiros').upsert(registro);
-                if (error) throw error;
-
-                if (formColaboradorFinanceiro.id) {
-                  setColaboradoresFinanceiros(colaboradoresFinanceiros.map(c => c.id === formColaboradorFinanceiro.id ? registro : c));
-                } else {
-                  setColaboradoresFinanceiros([...colaboradoresFinanceiros, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro Colaborador Financeiro', 'Colaboradores', `Colaborador ${registro.nome} registrado no evento ${registro.evento_ou_artigo}`);
-                alert('Colaborador financeiro salvo no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar colaborador: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
-              <div>
-                <label className="block mb-1">Nome Completo:*</label>
-                <input type="text" required value={formColaboradorFinanceiro.nome || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, nome: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* MODAL 3: COLABORADOR EXTERNO */}
+      {modalAtivo === 'colaborador' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formColaborador.id ? 'Editar Colaborador Externo' : 'Cadastrar Colaborador Externo'}
+            </h2>
+            <form onSubmit={salvarColaborador} className="space-y-3 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1">CPF:*</label>
-                  <input type="text" required value={formColaboradorFinanceiro.cpf || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, cpf: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Nome Completo:</label>
+                  <input type="text" required value={formColaborador.nome || ''} onChange={(e) => setFormColaborador({ ...formColaborador, nome: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Titulação:*</label>
-                  <select value={formColaboradorFinanceiro.titulacao || 'Doutor'} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, titulacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">CPF:</label>
+                  <input type="text" required value={formColaborador.cpf || ''} onChange={(e) => setFormColaborador({ ...formColaborador, cpf: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Titulação:</label>
+                  <select value={formColaborador.titulacao || 'Doutor'} onChange={(e) => setFormColaborador({ ...formColaborador, titulacao: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Especialista">Especialista</option>
                     <option value="Mestre">Mestre</option>
                     <option value="Doutor">Doutor</option>
@@ -2855,180 +3085,118 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">E-mail:*</label>
-                  <input type="email" required value={formColaboradorFinanceiro.email || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, email: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">E-mail:</label>
+                  <input type="email" required value={formColaborador.email || ''} onChange={(e) => setFormColaborador({ ...formColaborador, email: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">ORCID ID:</label>
-                  <input type="text" value={formColaboradorFinanceiro.orcid || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, orcid: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="0000-0000-0000-0000" />
+                  <label className="block mb-1">ORCID:</label>
+                  <input type="text" value={formColaborador.orcid || ''} onChange={(e) => setFormColaborador({ ...formColaborador, orcid: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Nº Conselho de Classe:</label>
-                  <input type="text" value={formColaboradorFinanceiro.numero_conselho || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, numero_conselho: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: CRM-PB 12345" />
-                </div>
-                <div>
-                  <label className="block mb-1">Afiliação Institucional:*</label>
-                  <input type="text" required value={formColaboradorFinanceiro.afiliacao || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, afiliacao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: UFCG, UFPB, HUAC" />
+                  <label className="block mb-1">Nº Conselho:</label>
+                  <input type="text" value={formColaborador.numero_conselho || ''} onChange={(e) => setFormColaborador({ ...formColaborador, numero_conselho: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
               <div>
-                <label className="block mb-1">Evento / Artigo Adquirido:*</label>
-                <input type="text" required value={formColaboradorFinanceiro.evento_ou_artigo || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, evento_ou_artigo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Nome do Congresso ou Revista Científica" />
+                <label className="block mb-1">Afiliação Institucional:</label>
+                <input type="text" required value={formColaborador.afiliacao || ''} onChange={(e) => setFormColaborador({ ...formColaborador, afiliacao: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex justify-end space-x-2 pt-2 border-t">
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Colaborador</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: COLABORADOR FINANCEIRO (ABA 3) */}
+      {modalAtivo === 'colaboradorFinanceiro' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Colaborador & Adquirição (Aba 3)</h2>
+            <form onSubmit={salvarColaboradorFinanceiro} className="space-y-3 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1">Valor Pago (R$):*</label>
-                  <input type="text" required value={formColaboradorFinanceiro.valor_pago || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, valor_pago: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: R$ 250,00" />
+                  <label className="block mb-1">Nome Completo:</label>
+                  <input type="text" required value={formColaboradorFinanceiro.nome || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, nome: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Status da Publicação:*</label>
-                  <select value={formColaboradorFinanceiro.status_publicacao || 'Em análise'} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, status_publicacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">CPF:</label>
+                  <input type="text" required value={formColaboradorFinanceiro.cpf || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, cpf: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Titulação:</label>
+                  <select value={formColaboradorFinanceiro.titulacao || 'Doutor'} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, titulacao: e.target.value as any })} className="w-full border p-2 rounded">
+                    <option value="Especialista">Especialista</option>
+                    <option value="Mestre">Mestre</option>
+                    <option value="Doutor">Doutor</option>
+                    <option value="Pós-Doutor">Pós-Doutor</option>
+                    <option value="Livre-Docente">Livre-Docente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1">E-mail:</label>
+                  <input type="email" required value={formColaboradorFinanceiro.email || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, email: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1">Evento ou Nome do Artigo Adquirido:</label>
+                <input type="text" required placeholder="Ex: Adquirição - Congresso Brasileiro de Trauma" value={formColaboradorFinanceiro.evento_ou_artigo || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, evento_ou_artigo: e.target.value })} className="w-full border p-2 rounded" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1">Valor Pago (R$):</label>
+                  <input type="text" required placeholder="Ex: R$ 150,00" value={formColaboradorFinanceiro.valor_pago || ''} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, valor_pago: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Status da Publicação:</label>
+                  <select value={formColaboradorFinanceiro.status_publicacao || 'Em análise'} onChange={(e) => setFormColaboradorFinanceiro({ ...formColaboradorFinanceiro, status_publicacao: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Em análise">Em análise</option>
                     <option value="Aprovada">Aprovada</option>
                     <option value="Reprovada">Reprovada</option>
                   </select>
                 </div>
               </div>
+
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Colaborador</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Registro</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: COLABORADOR EXTERNO ACADÊMICO */}
-      {modalAtivo === 'colaborador' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🌐 {formColaborador.id ? 'Editar Colaborador Externo' : 'Cadastrar Colaborador Externo'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formColaborador.id || String(Date.now());
-                const registro: ColaboradorExterno = {
-                  id: idFinal,
-                  nome: formColaborador.nome || '',
-                  cpf: formColaborador.cpf || '',
-                  titulacao: formColaborador.titulacao || 'Doutor',
-                  email: formColaborador.email || '',
-                  orcid: formColaborador.orcid || '',
-                  numero_conselho: formColaborador.numero_conselho || '',
-                  afiliacao: formColaborador.afiliacao || '',
-                };
-
-                const { error } = await supabase.from('colaboradores').upsert(registro);
-                if (error) throw error;
-
-                if (formColaborador.id) {
-                  setColaboradores(colaboradores.map(c => c.id === formColaborador.id ? registro : c));
-                } else {
-                  setColaboradores([...colaboradores, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro Colaborador Externo', 'Colaboradores', `Colaborador ${registro.nome} salvo`);
-                alert('Colaborador externo salvo no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar colaborador: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
-              <div>
-                <label className="block mb-1">Nome Completo:*</label>
-                <input type="text" required value={formColaborador.nome || ''} onChange={(e) => setFormColaborador({ ...formColaborador, nome: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1">CPF:*</label>
-                  <input type="text" required value={formColaborador.cpf || ''} onChange={(e) => setFormColaborador({ ...formColaborador, cpf: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">Titulação:*</label>
-                  <select value={formColaborador.titulacao || 'Doutor'} onChange={(e) => setFormColaborador({ ...formColaborador, titulacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
-                    <option value="Especialista">Especialista</option>
-                    <option value="Mestre">Mestre</option>
-                    <option value="Doutor">Doutor</option>
-                    <option value="Pós-Doutor">Pós-Doutor</option>
-                    <option value="Livre-Docente">Livre-Docente</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block mb-1">E-mail:*</label>
-                  <input type="email" required value={formColaborador.email || ''} onChange={(e) => setFormColaborador({ ...formColaborador, email: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">ORCID ID:</label>
-                  <input type="text" value={formColaborador.orcid || ''} onChange={(e) => setFormColaborador({ ...formColaborador, orcid: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">Nº Conselho:</label>
-                  <input type="text" value={formColaborador.numero_conselho || ''} onChange={(e) => setFormColaborador({ ...formColaborador, numero_conselho: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-                <div>
-                  <label className="block mb-1">Afiliação Institucional:*</label>
-                  <input type="text" required value={formColaborador.afiliacao || ''} onChange={(e) => setFormColaborador({ ...formColaborador, afiliacao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LANÇAMENTO DE CAIXA MANUAL */}
+      {/* MODAL 5: MOVIMENTAÇÃO DE CAIXA (MANUAL) */}
       {modalAtivo === 'movimentacao' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">➕ Novo Lançamento de Caixa</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const registro: MovimentacaoFinanceira = {
-                  id: String(Date.now()),
-                  descricao: formMovimentacao.descricao || '',
-                  valor: Number(formMovimentacao.valor || 0),
-                  tipo: formMovimentacao.tipo || 'Entrada',
-                  categoria: formMovimentacao.categoria || 'Outros',
-                  data: formMovimentacao.data || new Date().toISOString().split('T')[0],
-                  observacoes: formMovimentacao.observacoes,
-                };
-
-                const { error } = await supabase.from('movimentacoes').upsert(registro);
-                if (error) throw error;
-
-                setMovimentacoes([registro, ...movimentacoes]);
-                setModalAtivo(null);
-                registrarAuditoria('Lançamento Caixa', 'Financeiro', `Lançamento R$ ${registro.valor} (${registro.tipo})`);
-                alert('Lançamento salvo no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar lançamento: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Novo Lançamento no Caixa</h2>
+            <form onSubmit={salvarMovimentacao} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Descrição do Lançamento:*</label>
-                <input type="text" required value={formMovimentacao.descricao || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, descricao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: Compra de materiais de consumo" />
+                <label className="block mb-1">Descrição:</label>
+                <input type="text" required value={formMovimentacao.descricao || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, descricao: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Tipo:*</label>
-                  <select value={formMovimentacao.tipo || 'Entrada'} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, tipo: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Valor (R$):</label>
+                  <input type="number" step="0.01" required value={formMovimentacao.valor || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, valor: parseFloat(e.target.value) })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Tipo:</label>
+                  <select value={formMovimentacao.tipo || 'Entrada'} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, tipo: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Entrada">Entrada (Receita)</option>
                     <option value="Saída">Saída (Despesa)</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block mb-1">Valor (R$):*</label>
-                  <input type="number" step="0.01" min="0" required value={formMovimentacao.valor || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, valor: parseFloat(e.target.value) })} className="w-full border p-2 rounded bg-slate-50" />
-                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Categoria:*</label>
-                  <select value={formMovimentacao.categoria || 'Outros'} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, categoria: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Categoria:</label>
+                  <select value={formMovimentacao.categoria || 'Outros'} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, categoria: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Mensalidade">Mensalidade</option>
                     <option value="Day Off">Day Off</option>
                     <option value="São João">São João</option>
@@ -3040,166 +3208,163 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">Data:*</label>
-                  <input type="date" required value={formMovimentacao.data || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, data: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data:</label>
+                  <input type="date" required value={formMovimentacao.data || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, data: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
-              <div>
-                <label className="block mb-1">Observações:</label>
-                <textarea rows={2} value={formMovimentacao.observacoes || ''} onChange={(e) => setFormMovimentacao({ ...formMovimentacao, observacoes: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-black">Registrar Lançamento</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-emerald-700 text-white font-black rounded hover:bg-emerald-800">Confirmar Lançamento</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: EDITAR MENSALIDADE DO MEMBRO */}
+      {/* MODAL 6: EDITAR MENSALIDADE DO MEMBRO */}
       {modalAtivo === 'editarMensalidade' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">💳 Mensalidade - {formEdicaoMensalidade.membro_nome}</h3>
-            <p className="text-xs text-slate-700 font-bold">Mês {formEdicaoMensalidade.mes} de {formEdicaoMensalidade.ano}</p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              Mensalidade: {NOMES_MESES[formEdicaoMensalidade.mes - 1]}/{formEdicaoMensalidade.ano}
+            </h2>
+            <p className="text-xs font-bold text-slate-700">Membro: <strong className="text-slate-900">{formEdicaoMensalidade.membro_nome}</strong></p>
             <div className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Status do Pagamento:*</label>
-                <select value={formEdicaoMensalidade.status} onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50 font-black">
+                <label className="block mb-1">Valor (R$):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formEdicaoMensalidade.valor}
+                  onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, valor: parseFloat(e.target.value) || 0 })}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Status do Pagamento:</label>
+                <select
+                  value={formEdicaoMensalidade.status}
+                  onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, status: e.target.value as any })}
+                  className="w-full border p-2 rounded"
+                >
                   <option value="Pago">✓ Pago</option>
                   <option value="Pendente">⏳ Pendente</option>
                 </select>
-              </div>
-              <div>
-                <label className="block mb-1">Valor do Pagamento (R$):*</label>
-                <input type="number" step="0.01" min="0" value={formEdicaoMensalidade.valor} onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, valor: parseFloat(e.target.value) })} className="w-full border p-2 rounded bg-slate-50 font-mono" />
               </div>
               {formEdicaoMensalidade.status === 'Pago' && (
                 <div>
-                  <label className="block mb-1">Data do Pagamento:*</label>
-                  <input type="date" value={formEdicaoMensalidade.data_pagamento} onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, data_pagamento: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data do Pagamento:</label>
+                  <input
+                    type="date"
+                    value={formEdicaoMensalidade.data_pagamento}
+                    onChange={(e) => setFormEdicaoMensalidade({ ...formEdicaoMensalidade, data_pagamento: e.target.value })}
+                    className="w-full border p-2 rounded"
+                  />
                 </div>
               )}
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="button" onClick={salvarEdicaoMensalidade} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Alteração</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="button" onClick={salvarEdicaoMensalidade} className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Alteração</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: EDITAR EVENTO ESPECIAL (DAY OFF / SÃO JOÃO) */}
+      {/* MODAL 7: EDITAR EVENTO ESPECIAL (DAY OFF / SÃO JOÃO) */}
       {modalAtivo === 'editarEventoEspecial' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🎉 Taxa {formEdicaoEventoEspecial.evento}</h3>
-            <p className="text-xs text-slate-700 font-bold">Membro: {formEdicaoEventoEspecial.membro_nome}</p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              Taxa de Evento: {formEdicaoEventoEspecial.evento}
+            </h2>
+            <p className="text-xs font-bold text-slate-700">Membro: <strong className="text-slate-900">{formEdicaoEventoEspecial.membro_nome}</strong></p>
             <div className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Status do Pagamento:*</label>
-                <select value={formEdicaoEventoEspecial.status} onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50 font-black">
+                <label className="block mb-1">Valor Cobrado (R$):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formEdicaoEventoEspecial.valor}
+                  onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, valor: parseFloat(e.target.value) || 0 })}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Status:</label>
+                <select
+                  value={formEdicaoEventoEspecial.status}
+                  onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, status: e.target.value as any })}
+                  className="w-full border p-2 rounded"
+                >
                   <option value="Pago">✓ Pago</option>
                   <option value="Pendente">⏳ Pendente</option>
                 </select>
               </div>
-              <div>
-                <label className="block mb-1">Valor Cobrado (R$):*</label>
-                <input type="number" step="0.01" min="0" value={formEdicaoEventoEspecial.valor} onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, valor: parseFloat(e.target.value) })} className="w-full border p-2 rounded bg-slate-50 font-mono" />
-              </div>
               {formEdicaoEventoEspecial.status === 'Pago' && (
                 <div>
-                  <label className="block mb-1">Data do Pagamento:*</label>
-                  <input type="date" value={formEdicaoEventoEspecial.data_pagamento} onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, data_pagamento: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data do Pagamento:</label>
+                  <input
+                    type="date"
+                    value={formEdicaoEventoEspecial.data_pagamento}
+                    onChange={(e) => setFormEdicaoEventoEspecial({ ...formEdicaoEventoEspecial, data_pagamento: e.target.value })}
+                    className="w-full border p-2 rounded"
+                  />
                 </div>
               )}
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="button" onClick={salvarEdicaoEventoEspecial} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Alteração</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="button" onClick={salvarEdicaoEventoEspecial} className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Alteração</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR PROJETO DE PESQUISA */}
+      {/* MODAL 8: PROJETO DE PESQUISA & ARTIGOS DERIVADOS */}
       {modalAtivo === 'projeto' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🔬 {formProjeto.id ? 'Editar Projeto de Pesquisa' : 'Novo Projeto de Pesquisa'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formProjeto.id || String(Date.now());
-                const registro: ProjetoPesquisa = {
-                  id: idFinal,
-                  titulo: formProjeto.titulo || '',
-                  coordenador: formProjeto.coordenador || '',
-                  linha_pesquisa: formProjeto.linha_pesquisa || '',
-                  docentes: formDocentesTexto ? formDocentesTexto.split(',').map(s => s.trim()) : [],
-                  discentes: formDiscentesTexto ? formDiscentesTexto.split(',').map(s => s.trim()) : [],
-                  parecer_cep: formProjeto.parecer_cep || '',
-                  caee_cep: formProjeto.caee_cep || '',
-                  financiamento: formProjeto.financiamento || '',
-                  observacoes: formProjeto.observacoes || '',
-                  status: formProjeto.status || 'Em aberto',
-                  artigos_derivados: formProjeto.artigos_derivados || [],
-                  anexos: formProjeto.anexos || [],
-                };
-
-                const { error } = await supabase.from('projetos').upsert(registro);
-                if (error) throw error;
-
-                if (formProjeto.id) {
-                  setProjetos(projetos.map(p => p.id === formProjeto.id ? registro : p));
-                } else {
-                  setProjetos([...projetos, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Projeto', 'Projetos', `Projeto ${registro.titulo} salvo`);
-                alert('Projeto de pesquisa salvo no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar projeto: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
-              <div>
-                <label className="block mb-1">Título do Projeto:*</label>
-                <input type="text" required value={formProjeto.titulo || ''} onChange={(e) => setFormProjeto({ ...formProjeto, titulo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
+          <div className="bg-white rounded-lg border border-slate-300 max-w-3xl w-full p-6 space-y-4 my-8 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formProjeto.id ? 'Editar Projeto de Pesquisa' : 'Novo Projeto de Pesquisa'}
+            </h2>
+            <form onSubmit={salvarProjeto} className="space-y-4 text-xs font-bold text-slate-900">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1">Coordenador do Projeto:*</label>
-                  <input type="text" required value={formProjeto.coordenador || ''} onChange={(e) => setFormProjeto({ ...formProjeto, coordenador: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <div className="sm:col-span-2">
+                  <label className="block mb-1">Título do Projeto:</label>
+                  <input type="text" required value={formProjeto.titulo || ''} onChange={(e) => setFormProjeto({ ...formProjeto, titulo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Linha de Pesquisa:*</label>
-                  <input type="text" required value={formProjeto.linha_pesquisa || ''} onChange={(e) => setFormProjeto({ ...formProjeto, linha_pesquisa: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Coordenador:</label>
+                  <input type="text" required value={formProjeto.coordenador || ''} onChange={(e) => setFormProjeto({ ...formProjeto, coordenador: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Docentes Envolvidos (separar por vírgula):</label>
-                  <input type="text" value={formDocentesTexto} onChange={(e) => setFormDocentesTexto(e.target.value)} className="w-full border p-2 rounded bg-slate-50" placeholder="Prof. A, Prof. B" />
+                  <label className="block mb-1">Linha de Pesquisa:</label>
+                  <input type="text" required value={formProjeto.linha_pesquisa || ''} onChange={(e) => setFormProjeto({ ...formProjeto, linha_pesquisa: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Discentes Envolvidos (separar por vírgula):</label>
-                  <input type="text" value={formDiscentesTexto} onChange={(e) => setFormDiscentesTexto(e.target.value)} className="w-full border p-2 rounded bg-slate-50" placeholder="Aluno A, Aluno B" />
+                  <label className="block mb-1">Docentes Envolvidos (separados por vírgula):</label>
+                  <input type="text" value={formDocentesTexto} onChange={(e) => setFormDocentesTexto(e.target.value)} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Discentes Envolvidos (separados por vírgula):</label>
+                  <input type="text" value={formDiscentesTexto} onChange={(e) => setFormDiscentesTexto(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
                 <div>
                   <label className="block mb-1">Parecer CEP:</label>
-                  <input type="text" value={formProjeto.parecer_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, parecer_cep: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Nº do Parecer CEP" />
+                  <input type="text" value={formProjeto.parecer_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, parecer_cep: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
                   <label className="block mb-1">CAEE CEP:</label>
-                  <input type="text" value={formProjeto.caee_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, caee_cep: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Número CAEE" />
+                  <input type="text" value={formProjeto.caee_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, caee_cep: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Financiamento / Agência:</label>
-                  <input type="text" value={formProjeto.financiamento || ''} onChange={(e) => setFormProjeto({ ...formProjeto, financiamento: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: CNPq, FAPESQ, Recursos Próprios" />
+                  <label className="block mb-1">Financiamento:</label>
+                  <input type="text" value={formProjeto.financiamento || ''} onChange={(e) => setFormProjeto({ ...formProjeto, financiamento: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Status do Projeto:*</label>
-                  <select value={formProjeto.status || 'Em aberto'} onChange={(e) => setFormProjeto({ ...formProjeto, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Status:</label>
+                  <select value={formProjeto.status || 'Em aberto'} onChange={(e) => setFormProjeto({ ...formProjeto, status: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Em aberto">Em aberto</option>
                     <option value="Submetido">Submetido</option>
                     <option value="Cadastrado">Cadastrado</option>
@@ -3208,110 +3373,65 @@ export default function Dashboard() {
                   </select>
                 </div>
               </div>
+
               <div>
                 <label className="block mb-1">Observações do Projeto:</label>
-                <textarea rows={2} value={formProjeto.observacoes || ''} onChange={(e) => setFormProjeto({ ...formProjeto, observacoes: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <textarea rows={2} value={formProjeto.observacoes || ''} onChange={(e) => setFormProjeto({ ...formProjeto, observacoes: e.target.value })} className="w-full border p-2 rounded" />
               </div>
 
-              {/* SESSÃO PARA ADICIONAR ARTIGO DERIVADO */}
-              <div className="border-t pt-3 space-y-2">
-                <p className="font-black text-slate-900">Vincular Artigo Derivado do Projeto:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-2 rounded border">
-                  <input type="text" placeholder="Título do Artigo" value={formArtigoDerivado.titulo || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, titulo: e.target.value })} className="border p-1.5 rounded bg-white text-xs" />
-                  <input type="text" placeholder="Revista Científica" value={formArtigoDerivado.revista || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, revista: e.target.value })} className="border p-1.5 rounded bg-white text-xs" />
-                  <input type="text" placeholder="Qualis / JCR / CiteScore" value={formArtigoDerivado.qualis_jcr_cite || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, qualis_jcr_cite: e.target.value })} className="border p-1.5 rounded bg-white text-xs" />
-                  <select value={formArtigoDerivado.status || 'em produção'} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, status: e.target.value as any })} className="border p-1.5 rounded bg-white text-xs">
-                    <option value="em produção">em produção</option>
-                    <option value="em revisão">em revisão</option>
-                    <option value="publicado">publicado</option>
+              {/* SESSÃO DE ARTIGOS DERIVADOS DENTRO DO MODAL */}
+              <div className="border p-3 rounded bg-slate-50 space-y-3">
+                <h3 className="font-black text-slate-900 border-b pb-1">➕ Adicionar Artigo Derivado ao Projeto</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input type="text" placeholder="Título do Artigo Derivado" value={formArtigoDerivado.titulo || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, titulo: e.target.value })} className="border p-1.5 rounded bg-white" />
+                  <input type="text" placeholder="Revista / Periódico Alvo" value={formArtigoDerivado.revista || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, revista: e.target.value })} className="border p-1.5 rounded bg-white" />
+                  <input type="text" placeholder="Qualis / JCR / CiteScore" value={formArtigoDerivado.qualis_jcr_cite || ''} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, qualis_jcr_cite: e.target.value })} className="border p-1.5 rounded bg-white" />
+                  <select value={formArtigoDerivado.status || 'em produção'} onChange={(e) => setFormArtigoDerivado({ ...formArtigoDerivado, status: e.target.value as any })} className="border p-1.5 rounded bg-white">
+                    <option value="em produção">Em Produção</option>
+                    <option value="em revisão">Em Revisão</option>
+                    <option value="publicado">Publicado</option>
                   </select>
-                  <button type="button" onClick={() => {
-                    if (!formArtigoDerivado.titulo) return;
-                    const novoArt: ArtigoDerivado = {
-                      id: String(Date.now()),
-                      titulo: formArtigoDerivado.titulo || '',
-                      revista: formArtigoDerivado.revista || '',
-                      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
-                      status: formArtigoDerivado.status || 'em produção',
-                      anexos: [],
-                    };
-                    setFormProjeto({
-                      ...formProjeto,
-                      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArt]
-                    });
-                    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
-                  }} className="sm:col-span-2 bg-slate-800 text-white font-black p-1.5 rounded hover:bg-slate-900">+ Adicionar Artigo Derivado</button>
                 </div>
+                <button type="button" onClick={adicionarArtigoDerivadoNoProjeto} className="bg-slate-200 hover:bg-slate-300 text-slate-900 font-black px-3 py-1 rounded border border-slate-400">
+                  + Anexar Artigo ao Projeto
+                </button>
               </div>
 
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Projeto</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 border rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Projeto Completo</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR DEMANDA */}
+      {/* MODAL 9: DEMANDA */}
       {modalAtivo === 'demanda' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📋 {formDemanda.id ? 'Editar Demanda' : 'Nova Demanda Administrativa'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formDemanda.id || String(Date.now());
-                const registro: Demanda = {
-                  id: idFinal,
-                  codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
-                  titulo: formDemanda.titulo || '',
-                  descricao: formDemanda.descricao || '',
-                  responsavel_nome: formDemanda.responsavel_nome || '',
-                  prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
-                  prioridade: formDemanda.prioridade || 'Média',
-                  status: formDemanda.status || 'Em andamento',
-                  anexos: formDemanda.anexos || [],
-                };
-
-                const { error } = await supabase.from('demandas').upsert(registro);
-                if (error) throw error;
-
-                if (formDemanda.id) {
-                  setDemandas(demandas.map(d => d.id === formDemanda.id ? registro : d));
-                } else {
-                  setDemandas([registro, ...demandas]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Demanda', 'Demandas', `Demanda ${registro.codigo} salva`);
-                alert('Demanda salva no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar demanda: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formDemanda.id ? 'Editar Demanda / Pendência' : 'Cadastrar Nova Demanda'}
+            </h2>
+            <form onSubmit={salvarDemanda} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Título da Demanda:*</label>
-                <input type="text" required value={formDemanda.titulo || ''} onChange={(e) => setFormDemanda({ ...formDemanda, titulo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Título da Demanda:</label>
+                <input type="text" required value={formDemanda.titulo || ''} onChange={(e) => setFormDemanda({ ...formDemanda, titulo: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div>
-                <label className="block mb-1">Descrição Detalhada:*</label>
-                <textarea rows={3} required value={formDemanda.descricao || ''} onChange={(e) => setFormDemanda({ ...formDemanda, descricao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Responsável:*</label>
-                  <input type="text" required value={formDemanda.responsavel_nome || ''} onChange={(e) => setFormDemanda({ ...formDemanda, responsavel_nome: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Responsável:</label>
+                  <input type="text" required value={formDemanda.responsavel_nome || ''} onChange={(e) => setFormDemanda({ ...formDemanda, responsavel_nome: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Prazo Final:*</label>
-                  <input type="date" required value={formDemanda.prazo_final || ''} onChange={(e) => setFormDemanda({ ...formDemanda, prazo_final: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Prazo Final:</label>
+                  <input type="date" required value={formDemanda.prazo_final || ''} onChange={(e) => setFormDemanda({ ...formDemanda, prazo_final: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Prioridade:*</label>
-                  <select value={formDemanda.prioridade || 'Média'} onChange={(e) => setFormDemanda({ ...formDemanda, prioridade: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Prioridade:</label>
+                  <select value={formDemanda.prioridade || 'Média'} onChange={(e) => setFormDemanda({ ...formDemanda, prioridade: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Baixa">Baixa</option>
                     <option value="Média">Média</option>
                     <option value="Alta">Alta</option>
@@ -3319,8 +3439,8 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">Status:*</label>
-                  <select value={formDemanda.status || 'Em andamento'} onChange={(e) => setFormDemanda({ ...formDemanda, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Status:</label>
+                  <select value={formDemanda.status || 'Em andamento'} onChange={(e) => setFormDemanda({ ...formDemanda, status: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Não iniciada">Não iniciada</option>
                     <option value="Em andamento">Em andamento</option>
                     <option value="Com pendências">Com pendências</option>
@@ -3328,96 +3448,70 @@ export default function Dashboard() {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="block mb-1">Descrição Detalhada:</label>
+                <textarea rows={3} value={formDemanda.descricao || ''} onChange={(e) => setFormDemanda({ ...formDemanda, descricao: e.target.value })} className="w-full border p-2 rounded" />
+              </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Demanda</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Demanda</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR PRODUÇÃO CIENTÍFICA */}
+      {/* MODAL 10: PRODUÇÃO CIENTÍFICA */}
       {modalAtivo === 'producao' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📈 {formProducao.id ? 'Editar Produção Científica' : 'Nova Produção Científica'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formProducao.id || String(Date.now());
-                const registro: ProducaoCientifica = {
-                  id: idFinal,
-                  categoria_producao: formProducao.categoria_producao || 'Periódico',
-                  tipo_producao: formProducao.tipo_producao || (formProducao.categoria_producao === 'Periódico' ? 'Artigo Científico' : 'Resumo Expandido'),
-                  titulo: formProducao.titulo || '',
-                  evento_ou_revista: formProducao.evento_ou_revista || '',
-                  autor_principal: formProducao.autor_principal || '',
-                  coautores: formProducao.coautores || '',
-                  ano_publicacao: formProducao.ano_publicacao || '2026',
-                  qualis_doi: formProducao.qualis_doi || '',
-                  status: formProducao.status || 'Publicado',
-                };
-
-                const { error } = await supabase.from('producoes').upsert(registro);
-                if (error) throw error;
-
-                if (formProducao.id) {
-                  setProducoes(producoes.map(p => p.id === formProducao.id ? registro : p));
-                } else {
-                  setProducoes([registro, ...producoes]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Produção', 'Produções', `Produção ${registro.titulo} salva`);
-                alert('Produção científica salva no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar produção: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
-              <div className="grid grid-cols-2 gap-3">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formProducao.id ? 'Editar Produção Científica' : 'Cadastrar Produção Científica'}
+            </h2>
+            <form onSubmit={salvarProducao} className="space-y-3 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Categoria:*</label>
-                  <select value={formProducao.categoria_producao || 'Periódico'} onChange={(e) => setFormProducao({ ...formProducao, categoria_producao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
-                    <option value="Periódico">Periódico (Artigo)</option>
-                    <option value="Congresso">Congresso (Resumo / Trabalho)</option>
+                  <label className="block mb-1">Categoria:</label>
+                  <select value={formProducao.categoria_producao || 'Periódico'} onChange={(e) => setFormProducao({ ...formProducao, categoria_producao: e.target.value as any })} className="w-full border p-2 rounded">
+                    <option value="Periódico">Periódico / Revista</option>
+                    <option value="Congresso">Congresso / Evento</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">Tipo Específico:*</label>
-                  <input type="text" required value={formProducao.tipo_producao || ''} onChange={(e) => setFormProducao({ ...formProducao, tipo_producao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: Artigo Original, Resumo Simples, Poster" />
+                  <label className="block mb-1">Tipo Específico:</label>
+                  <input type="text" placeholder="Ex: Artigo Científico, Resumo Expandido" value={formProducao.tipo_producao || ''} onChange={(e) => setFormProducao({ ...formProducao, tipo_producao: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
               <div>
-                <label className="block mb-1">Título do Trabalho / Artigo:*</label>
-                <input type="text" required value={formProducao.titulo || ''} onChange={(e) => setFormProducao({ ...formProducao, titulo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Título do Trabalho:</label>
+                <input type="text" required value={formProducao.titulo || ''} onChange={(e) => setFormProducao({ ...formProducao, titulo: e.target.value })} className="w-full border p-2 rounded" />
               </div>
               <div>
-                <label className="block mb-1">Nome da Revista ou Congresso:*</label>
-                <input type="text" required value={formProducao.evento_ou_revista || ''} onChange={(e) => setFormProducao({ ...formProducao, evento_ou_revista: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Nome do Periódico ou Evento / Congresso:</label>
+                <input type="text" required value={formProducao.evento_ou_revista || ''} onChange={(e) => setFormProducao({ ...formProducao, evento_ou_revista: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Autor Principal:*</label>
-                  <input type="text" required value={formProducao.autor_principal || ''} onChange={(e) => setFormProducao({ ...formProducao, autor_principal: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Autor Principal:</label>
+                  <input type="text" required value={formProducao.autor_principal || ''} onChange={(e) => setFormProducao({ ...formProducao, autor_principal: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Coautores (separar por vírgula):</label>
-                  <input type="text" value={formProducao.coautores || ''} onChange={(e) => setFormProducao({ ...formProducao, coautores: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Coautores:</label>
+                  <input type="text" value={formProducao.coautores || ''} onChange={(e) => setFormProducao({ ...formProducao, coautores: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block mb-1">Ano Publicação:*</label>
-                  <input type="text" required value={formProducao.ano_publicacao || '2026'} onChange={(e) => setFormProducao({ ...formProducao, ano_publicacao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Ano:</label>
+                  <input type="text" required value={formProducao.ano_publicacao || '2026'} onChange={(e) => setFormProducao({ ...formProducao, ano_publicacao: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Qualis / DOI / ISSN:</label>
-                  <input type="text" value={formProducao.qualis_doi || ''} onChange={(e) => setFormProducao({ ...formProducao, qualis_doi: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Qualis / DOI:</label>
+                  <input type="text" value={formProducao.qualis_doi || ''} onChange={(e) => setFormProducao({ ...formProducao, qualis_doi: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Status:*</label>
-                  <select value={formProducao.status || 'Publicado'} onChange={(e) => setFormProducao({ ...formProducao, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Status:</label>
+                  <select value={formProducao.status || 'Publicado'} onChange={(e) => setFormProducao({ ...formProducao, status: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Pendente Submissão">Pendente Submissão</option>
                     <option value="Submetido">Submetido</option>
                     <option value="Publicado">Publicado</option>
@@ -3425,197 +3519,156 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Produção</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Produção</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CARGA EM MASSA DE PRODUÇÕES (EXCEL / TEXTO) */}
-      {modalAtivo === 'cargaMassaProducao' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-2xl w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📥 Importar Produções Científicas em Massa</h3>
-            
-            <div className="space-y-4 text-xs font-bold text-slate-900">
-              <div className="bg-slate-50 p-4 rounded border space-y-2">
-                <label className="block font-black text-slate-900">1. Selecionar Arquivo Excel / CSV / Word (.xlsx, .xls, .csv, .doc):</label>
-                <input
-                  type="file"
-                  accept=".csv, .xls, .xlsx, .doc, .docx, .txt"
-                  onChange={(e) => {
-                    handleProcessarArquivoEmMassa(e, 'producoes');
-                    setModalAtivo(null);
-                  }}
-                  className="w-full text-xs font-bold text-slate-900"
-                />
-                <p className="text-[10px] text-slate-600 font-normal">Mapeamento automático de colunas (Título, Revista, Autor, Qualis, Ano, Status).</p>
+      {/* MODAL 11: CADASTRAR/EDITAR META ANUAL DE PRODUÇÃO */}
+      {modalAtivo === 'cadastrarMeta' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Definir Metas Anuais de Produção</h2>
+            <form onSubmit={salvarMetaAnual} className="space-y-3 text-xs font-bold text-slate-900">
+              <div>
+                <label className="block mb-1">Ano de Referência:</label>
+                <input type="text" required value={formMetaAnual.ano || '2026'} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, ano: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-
-              <div className="border-t pt-3 space-y-2">
-                <label className="block font-black text-slate-900">2. Ou cole dados tabulados (Copiar do Excel / Bloco de Notas):</label>
-                <form onSubmit={handleCargaMassaProducoes} className="space-y-3">
-                  <textarea
-                    rows={5}
-                    required
-                    value={textoCargaMassaProducao}
-                    onChange={(e) => setTextoCargaMassaProducao(e.target.value)}
-                    placeholder="Formato por linha (separado por TAB ou ponto e vírgula):
-Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Principal ; Coautores ; Ano ; Qualis/DOI ; Status"
-                    className="w-full border p-2 rounded font-mono text-[11px] bg-slate-50"
-                  />
-                  <div className="flex justify-end space-x-2">
-                    <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Processar e Salvar</button>
-                  </div>
-                </form>
+              <div>
+                <label className="block mb-1">Meta de Artigos Produzidos (Em elaboração / submetidos):</label>
+                <input type="number" required value={formMetaAnual.meta_artigos_produzidos || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_artigos_produzidos: parseInt(e.target.value) || 0 })} className="w-full border p-2 rounded" />
               </div>
-            </div>
+              <div>
+                <label className="block mb-1">Meta de Artigos Publicados:</label>
+                <input type="number" required value={formMetaAnual.meta_artigos_publicados || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_artigos_publicados: parseInt(e.target.value) || 0 })} className="w-full border p-2 rounded" />
+              </div>
+              <div>
+                <label className="block mb-1">Meta de Resumos Aprovados em Congressos:</label>
+                <input type="number" required value={formMetaAnual.meta_resumos || 0} onChange={(e) => setFormMetaAnual({ ...formMetaAnual, meta_resumos: parseInt(e.target.value) || 0 })} className="w-full border p-2 rounded" />
+              </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t">
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-amber-700 text-white font-black rounded hover:bg-amber-800">Salvar Meta</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR REUNIÃO / ENCONTRO COM LISTA DE PRESENÇA */}
+      {/* MODAL 12: IMPORTAÇÃO DE PRODUÇÕES EM MASSA (TXT / EXCEL / CSV) */}
+      {modalAtivo === 'cargaMassaProducao' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-2xl w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Importação de Produções Científicas</h2>
+
+            <div className="bg-slate-50 p-3 rounded border border-slate-300 space-y-2">
+              <label className="block font-black text-xs text-slate-900">📂 Selecionar Arquivo em Planilha (XLS, XLSX) ou CSV:</label>
+              <input
+                type="file"
+                accept=".csv, .xls, .xlsx"
+                onChange={(e) => handleProcessarArquivoEmMassa(e, 'producoes')}
+                className="w-full text-xs font-bold text-slate-900"
+              />
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-300"></div>
+              <span className="flex-shrink mx-4 text-xs font-black text-slate-500">OU COLE O TEXTO SEPARADO POR TABS/PONTO-E-VÍRGULA</span>
+              <div className="flex-grow border-t border-slate-300"></div>
+            </div>
+
+            <form onSubmit={handleCargaMassaProducoes} className="space-y-3">
+              <textarea
+                rows={5}
+                required
+                value={textoCargaMassaProducao}
+                onChange={(e) => setTextoCargaMassaProducao(e.target.value)}
+                placeholder="Categoria ; Tipo ; Título ; Evento ou Revista ; Autor Principal ; Coautores ; Ano ; Qualis/DOI ; Status"
+                className="w-full border p-2 rounded text-xs font-mono font-bold text-slate-900"
+              />
+              <div className="flex justify-between items-center">
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded text-xs">Fechar</button>
+                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black text-xs rounded hover:bg-red-800">
+                  Processar Texto Colado
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 13: REUNIÃO / ENCONTRO CIENTÍFICO COM CHAMADA */}
       {modalAtivo === 'reuniao' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📅 Cadastrar Encontro Científico & Chamada</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const listaPresencas = membrosAtivos.map(m => ({
-                  membro_id: m.id,
-                  membro_nome: m.nome_completo,
-                  status: presencasChamada[m.id] || 'presente',
-                }));
-
-                const registro: ReuniaoCientifica = {
-                  id: String(Date.now()),
-                  titulo: formReuniao.titulo || 'Encontro Científico GETECC',
-                  data: formReuniao.data || new Date().toISOString().split('T')[0],
-                  horario: formReuniao.horario || '19:00',
-                  pauta: formReuniao.pauta || 'Pauta científica e discussão de artigos.',
-                  presencas: listaPresencas,
-                };
-
-                const { error } = await supabase.from('reunioes').upsert(registro);
-                if (error) throw error;
-
-                setReunioes([registro, ...reunioes]);
-                setModalAtivo(null);
-                setPresencasChamada({});
-                registrarAuditoria('Cadastro Encontro', 'Reuniões', `Encontro em ${registro.data} cadastrado com lista de presença`);
-                alert('Encontro científico e presenças gravados no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar reunião: ${err.message || err}`);
-              }
-            }} className="space-y-4 text-xs font-bold text-slate-900">
-              <div>
-                <label className="block mb-1">Título do Encontro:*</label>
-                <input type="text" required value={formReuniao.titulo || ''} onChange={(e) => setFormReuniao({ ...formReuniao, titulo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" placeholder="Ex: Reunião Ordinária - Módulo Traumas" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1">Data:*</label>
-                  <input type="date" required value={formReuniao.data || ''} onChange={(e) => setFormReuniao({ ...formReuniao, data: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+          <div className="bg-white rounded-lg border border-slate-300 max-w-2xl w-full p-6 space-y-4 my-8 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">Cadastrar Encontro Científico & Chamada</h2>
+            <form onSubmit={salvarReuniao} className="space-y-4 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block mb-1">Título do Encontro:</label>
+                  <input type="text" required placeholder="Ex: Encontro Quinzenal de Trauma" value={formReuniao.titulo || ''} onChange={(e) => setFormReuniao({ ...formReuniao, titulo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Horário:*</label>
-                  <input type="time" required value={formReuniao.horario || ''} onChange={(e) => setFormReuniao({ ...formReuniao, horario: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data:</label>
+                  <input type="date" required value={formReuniao.data || ''} onChange={(e) => setFormReuniao({ ...formReuniao, data: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
               <div>
-                <label className="block mb-1">Pauta / Tópicos Abordados:*</label>
-                <textarea rows={2} required value={formReuniao.pauta || ''} onChange={(e) => setFormReuniao({ ...formReuniao, pauta: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Pauta do Encontro:</label>
+                <textarea rows={2} required value={formReuniao.pauta || ''} onChange={(e) => setFormReuniao({ ...formReuniao, pauta: e.target.value })} className="w-full border p-2 rounded" />
               </div>
 
-              {/* LISTA DE PRESENÇA DOS MEMBROS ATIVOS */}
-              <div className="border-t pt-3 space-y-2">
-                <p className="font-black text-slate-900 text-sm">Lista de Chamada dos Membros Ativos:</p>
-                <div className="max-h-52 overflow-y-auto border rounded divide-y divide-slate-200">
-                  {membrosAtivos.map((mb) => (
-                    <div key={mb.id} className="p-2 flex justify-between items-center bg-slate-50">
-                      <span className="font-black text-slate-900">{mb.nome_completo}</span>
-                      <select
-                        value={presencasChamada[mb.id] || 'presente'}
-                        onChange={(e) => setPresencasChamada({ ...presencasChamada, [mb.id]: e.target.value as any })}
-                        className="p-1 border rounded font-black text-xs bg-white"
-                      >
-                        <option value="presente">✓ Presente</option>
-                        <option value="falta">✕ Falta</option>
-                        <option value="falta_justificada">⚠️ Falta Justificada</option>
-                      </select>
-                    </div>
-                  ))}
-                </div>
+              {/* LISTA DE CHAMADA DE MEMBROS ATIVOS */}
+              <div className="border p-3 rounded bg-slate-50 space-y-2 max-h-60 overflow-y-auto">
+                <h3 className="font-black text-slate-900 border-b pb-1">📋 Chamada de Membros Ativos ({membrosAtivos.length}):</h3>
+                {membrosAtivos.map((m) => (
+                  <div key={m.id} className="flex justify-between items-center py-1 border-b text-xs">
+                    <span className="font-bold">{m.nome_completo}</span>
+                    <select
+                      value={presencasChamada[m.id] || 'presente'}
+                      onChange={(e) => setPresencasChamada({ ...presencasChamada, [m.id]: e.target.value as any })}
+                      className="border p-1 rounded font-bold bg-white"
+                    >
+                      <option value="presente">✓ Presente</option>
+                      <option value="falta">✕ Falta</option>
+                      <option value="falta_justificada">⚠️ Falta Justificada</option>
+                    </select>
+                  </div>
+                ))}
               </div>
 
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Encontro</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Encontro & Chamada</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR PATRIMÔNIO */}
+      {/* MODAL 14: PATRIMÔNIO GETECC */}
       {modalAtivo === 'patrimonio' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📦 {formPatrimonio.id ? 'Editar Patrimônio' : 'Novo Item do Patrimônio'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formPatrimonio.id || String(Date.now());
-                const registro: PatrimonioProduto = {
-                  id: idFinal,
-                  nome: formPatrimonio.nome || '',
-                  descricao: formPatrimonio.descricao || '',
-                  quantidade: Number(formPatrimonio.quantidade || 1),
-                  foto_dataurl: formPatrimonio.foto_dataurl,
-                  estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
-                  responsavel: formPatrimonio.responsavel || '',
-                };
-
-                const { error } = await supabase.from('patrimonio').upsert(registro);
-                if (error) throw error;
-
-                if (formPatrimonio.id) {
-                  setPatrimonio(patrimonio.map(p => p.id === formPatrimonio.id ? registro : p));
-                } else {
-                  setPatrimonio([...patrimonio, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Patrimônio', 'Patrimônio', `Item ${registro.nome} salvo`);
-                alert('Item do patrimônio salvo no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar patrimônio: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formPatrimonio.id ? 'Editar Item do Patrimônio' : 'Cadastrar Item no Patrimônio'}
+            </h2>
+            <form onSubmit={salvarPatrimonio} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1 font-black">Foto do Produto/Item:</label>
-                <input type="file" accept="image/*" onChange={handleUploadFotoPatrimonio} className="text-xs" />
+                <label className="block mb-1">Nome do Item / Produto:</label>
+                <input type="text" required value={formPatrimonio.nome || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, nome: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div>
-                <label className="block mb-1">Nome do Item:*</label>
-                <input type="text" required value={formPatrimonio.nome || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, nome: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div>
-                <label className="block mb-1">Descrição Detalhada:*</label>
-                <textarea rows={2} required value={formPatrimonio.descricao || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, descricao: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Quantidade:*</label>
-                  <input type="number" min="1" required value={formPatrimonio.quantidade || 1} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, quantidade: parseInt(e.target.value) })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Quantidade:</label>
+                  <input type="number" required value={formPatrimonio.quantidade || 1} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, quantidade: parseInt(e.target.value) || 1 })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Estado de Conservação:*</label>
-                  <select value={formPatrimonio.estado_conservacao || 'Excelente'} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, estado_conservacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Estado de Conservação:</label>
+                  <select value={formPatrimonio.estado_conservacao || 'Excelente'} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, estado_conservacao: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Excelente">Excelente</option>
                     <option value="Bom">Bom</option>
                     <option value="Regular">Regular</option>
@@ -3624,62 +3677,42 @@ Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Princ
                 </div>
               </div>
               <div>
-                <label className="block mb-1">Membro Responsável / Guardião:*</label>
-                <input type="text" required value={formPatrimonio.responsavel || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, responsavel: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Responsável pela Guarda:</label>
+                <input type="text" required value={formPatrimonio.responsavel || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, responsavel: e.target.value })} className="w-full border p-2 rounded" />
+              </div>
+              <div>
+                <label className="block mb-1">Descrição / Especificações:</label>
+                <textarea rows={2} value={formPatrimonio.descricao || ''} onChange={(e) => setFormPatrimonio({ ...formPatrimonio, descricao: e.target.value })} className="w-full border p-2 rounded" />
+              </div>
+              <div>
+                <label className="block mb-1">Foto do Produto:</label>
+                <input type="file" accept="image/*" onChange={handleUploadFotoPatrimonio} className="w-full border p-1 rounded" />
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Item</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Item</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR MARKETING */}
+      {/* MODAL 15: MARKETING & MÍDIAS */}
       {modalAtivo === 'marketing' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">📣 {formMarketing.id ? 'Editar Ação de Mídia' : 'Nova Ação de Marketing'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const idFinal = formMarketing.id || String(Date.now());
-                const registro: MarketingItem = {
-                  id: idFinal,
-                  titulo: formMarketing.titulo || '',
-                  canal: formMarketing.canal || 'Instagram',
-                  responsavel: formMarketing.responsavel || '',
-                  data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
-                  status: formMarketing.status || 'Ideia',
-                  legenda: formMarketing.legenda || '',
-                  artes: formMarketing.artes || [],
-                };
-
-                const { error } = await supabase.from('marketing').upsert(registro);
-                if (error) throw error;
-
-                if (formMarketing.id) {
-                  setMarketing(marketing.map(m => m.id === formMarketing.id ? registro : m));
-                } else {
-                  setMarketing([...marketing, registro]);
-                }
-
-                setModalAtivo(null);
-                registrarAuditoria('Cadastro/Edição Marketing', 'Marketing', `Ação de mídia ${registro.titulo} salva`);
-                alert('Ação de marketing salva no Supabase!');
-              } catch (err: any) {
-                alert(`Erro ao salvar marketing: ${err.message || err}`);
-              }
-            }} className="space-y-3 text-xs font-bold text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formMarketing.id ? 'Editar Ação de Marketing' : 'Cadastrar Ação de Mídia'}
+            </h2>
+            <form onSubmit={salvarMarketing} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
-                <label className="block mb-1">Título da Publicação/Ação:*</label>
-                <input type="text" required value={formMarketing.titulo || ''} onChange={(e) => setFormMarketing({ ...formMarketing, titulo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Título da Publicação / Post:</label>
+                <input type="text" required value={formMarketing.titulo || ''} onChange={(e) => setFormMarketing({ ...formMarketing, titulo: e.target.value })} className="w-full border p-2 rounded" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Canal de Mídia:*</label>
-                  <select value={formMarketing.canal || 'Instagram'} onChange={(e) => setFormMarketing({ ...formMarketing, canal: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Canal:</label>
+                  <select value={formMarketing.canal || 'Instagram'} onChange={(e) => setFormMarketing({ ...formMarketing, canal: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Instagram">Instagram</option>
                     <option value="Site / Portal">Site / Portal</option>
                     <option value="E-mail Marketing">E-mail Marketing</option>
@@ -3688,8 +3721,8 @@ Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Princ
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-1">Status:*</label>
-                  <select value={formMarketing.status || 'Ideia'} onChange={(e) => setFormMarketing({ ...formMarketing, status: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Status:</label>
+                  <select value={formMarketing.status || 'Ideia'} onChange={(e) => setFormMarketing({ ...formMarketing, status: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Ideia">Ideia</option>
                     <option value="Em Produção">Em Produção</option>
                     <option value="Aprovado">Aprovado</option>
@@ -3697,90 +3730,78 @@ Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Princ
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Membro Responsável:*</label>
-                  <input type="text" required value={formMarketing.responsavel || ''} onChange={(e) => setFormMarketing({ ...formMarketing, responsavel: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Responsável:</label>
+                  <input type="text" required value={formMarketing.responsavel || ''} onChange={(e) => setFormMarketing({ ...formMarketing, responsavel: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Data Prevista:*</label>
-                  <input type="date" required value={formMarketing.data_prevista || ''} onChange={(e) => setFormMarketing({ ...formMarketing, data_prevista: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Data Prevista:</label>
+                  <input type="date" required value={formMarketing.data_prevista || ''} onChange={(e) => setFormMarketing({ ...formMarketing, data_prevista: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
               <div>
-                <label className="block mb-1">Legenda / Texto do Post:</label>
-                <textarea rows={3} value={formMarketing.legenda || ''} onChange={(e) => setFormMarketing({ ...formMarketing, legenda: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                <label className="block mb-1">Legenda / Texto:</label>
+                <textarea rows={3} value={formMarketing.legenda || ''} onChange={(e) => setFormMarketing({ ...formMarketing, legenda: e.target.value })} className="w-full border p-2 rounded" />
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Ação</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Ação</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRAR / EDITAR USUÁRIO & PERMISSÕES POR ABA */}
+      {/* MODAL 16: USUÁRIO E MATRIZ DE PERMISSÕES POR ABA */}
       {modalAtivo === 'usuario' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🛡️ {formUsuario.id ? 'Editar Permissões do Usuário' : 'Novo Usuário do Sistema'}</h3>
+          <div className="bg-white rounded-lg border border-slate-300 max-w-2xl w-full p-6 space-y-4 my-8 shadow-xl">
+            <h2 className="text-base font-black text-slate-900 border-b pb-2">
+              {formUsuario.id ? 'Editar Usuário e Permissões' : 'Cadastrar Novo Usuário'}
+            </h2>
             <form onSubmit={salvarUsuarioSupabase} className="space-y-4 text-xs font-bold text-slate-900">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block mb-1">Nome Completo:*</label>
-                  <input type="text" required value={formUsuario.nome_completo || ''} onChange={(e) => setFormUsuario({ ...formUsuario, nome_completo: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">Nome Completo:</label>
+                  <input type="text" required value={formUsuario.nome_completo || ''} onChange={(e) => setFormUsuario({ ...formUsuario, nome_completo: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">E-mail de Acesso:*</label>
-                  <input type="email" required value={formUsuario.email || ''} onChange={(e) => setFormUsuario({ ...formUsuario, email: e.target.value })} className="w-full border p-2 rounded bg-slate-50" />
+                  <label className="block mb-1">E-mail de Acesso:</label>
+                  <input type="email" required value={formUsuario.email || ''} onChange={(e) => setFormUsuario({ ...formUsuario, email: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Perfil de Acesso:*</label>
-                  <select value={formUsuario.perfil_acesso || 'Membro'} onChange={(e) => setFormUsuario({ ...formUsuario, perfil_acesso: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
+                  <label className="block mb-1">Perfil de Acesso:</label>
+                  <select value={formUsuario.perfil_acesso || 'Membro'} onChange={(e) => setFormUsuario({ ...formUsuario, perfil_acesso: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Administrador">Administrador (Acesso Total)</option>
                     <option value="Coordenador">Coordenador</option>
                     <option value="Apoio Técnico">Apoio Técnico</option>
                     <option value="Membro">Membro</option>
-                    <option value="Consulta">Consulta (Apenas Leitura)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block mb-1">Situação:*</label>
-                  <select value={formUsuario.situacao || 'Ativo'} onChange={(e) => setFormUsuario({ ...formUsuario, situacao: e.target.value as any })} className="w-full border p-2 rounded bg-slate-50">
-                    <option value="Ativo">Ativo</option>
-                    <option value="Inativo">Inativo</option>
+                    <option value="Consulta">Consulta</option>
                   </select>
                 </div>
               </div>
 
-              {/* MATRIZ DETALHADA DE PERMISSÕES POR ABA */}
-              <div className="border-t pt-3 space-y-2">
-                <p className="font-black text-slate-900 text-sm">Matriz Granular de Permissões por Módulo:</p>
-                <p className="text-[10px] text-slate-600 font-normal">Defina quais abas o usuário pode visualizar e/ou editar. (Administradores ignoram esta matriz).</p>
-                <div className="space-y-1.5 max-h-56 overflow-y-auto border rounded p-2 bg-slate-50">
+              {/* MATRIZ DE PERMISSÕES POR ABA */}
+              <div className="border p-3 rounded bg-slate-50 space-y-2 max-h-72 overflow-y-auto">
+                <h3 className="font-black text-slate-900 border-b pb-1">🔑 Matriz de Permissões Específicas por Módulo:</h3>
+                <div className="space-y-2">
                   {abasDisponiveisChaves.map((aba) => {
-                    const permVis = formUsuario.permissoes?.[aba.key]?.visualizar ?? true;
-                    const permEdt = formUsuario.permissoes?.[aba.key]?.editar ?? false;
+                    const permAtual = formUsuario.permissoes?.[aba.key] || { visualizar: false, editar: false };
 
                     return (
-                      <div key={aba.key} className="flex justify-between items-center p-1.5 bg-white border rounded text-xs">
-                        <span className="font-bold text-slate-900 truncate">{aba.label}</span>
-                        <div className="flex items-center space-x-3">
+                      <div key={aba.key} className="flex justify-between items-center bg-white p-2 border rounded">
+                        <span className="font-bold text-slate-900">{aba.label}</span>
+                        <div className="flex space-x-4">
                           <label className="flex items-center space-x-1 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={permVis}
-                              onChange={(e) => setFormUsuario({
-                                ...formUsuario,
-                                permissoes: {
-                                  ...formUsuario.permissoes,
-                                  [aba.key]: {
-                                    visualizar: e.target.checked,
-                                    editar: e.target.checked ? permEdt : false,
-                                  }
-                                }
-                              })}
+                              checked={permAtual.visualizar}
+                              onChange={(e) => {
+                                const novas = { ...(formUsuario.permissoes || {}) };
+                                novas[aba.key] = { ...permAtual, visualizar: e.target.checked };
+                                setFormUsuario({ ...formUsuario, permissoes: novas });
+                              }}
                             />
                             <span>Visualizar</span>
                           </label>
@@ -3788,19 +3809,14 @@ Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Princ
                           <label className="flex items-center space-x-1 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={permEdt}
-                              onChange={(e) => setFormUsuario({
-                                ...formUsuario,
-                                permissoes: {
-                                  ...formUsuario.permissoes,
-                                  [aba.key]: {
-                                    visualizar: e.target.checked ? true : permVis,
-                                    editar: e.target.checked,
-                                  }
-                                }
-                              })}
+                              checked={permAtual.editar}
+                              onChange={(e) => {
+                                const novas = { ...(formUsuario.permissoes || {}) };
+                                novas[aba.key] = { ...permAtual, editar: e.target.checked };
+                                setFormUsuario({ ...formUsuario, permissoes: novas });
+                              }}
                             />
-                            <span className="text-red-700 font-black">Editar/Excluir</span>
+                            <span className="text-red-700 font-black">Editar/Criar</span>
                           </label>
                         </div>
                       </div>
@@ -3810,59 +3826,79 @@ Categoria (Periódico/Congresso) ; Tipo ; Título ; Revista/Evento ; Autor Princ
               </div>
 
               <div className="flex justify-end space-x-2 pt-2 border-t">
-                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black">Salvar Usuário & Permissões</button>
+                <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 border rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Credenciais & Permissões</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: REDEFINIÇÃO DE SENHA DO USUÁRIO */}
+      {/* MODAL 17: REDEFINIÇÃO DE SENHAS DE USUÁRIOS */}
       {modalAtivo === 'resetSenha' && usuarioResetSenha && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-black text-slate-900 border-b pb-2">🔑 Redefinir Senha do Usuário</h3>
-            <p className="text-xs text-slate-700 font-bold">Usuário: <strong>{usuarioResetSenha.nome_completo}</strong> ({usuarioResetSenha.email})</p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg border border-slate-300 max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                <span>🔑</span>
+                <span>Redefinição de Senha</span>
+              </h2>
+              <button onClick={() => setModalAtivo(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
 
-            <div className="space-y-4 text-xs font-bold text-slate-900">
-              <div className="bg-blue-50 p-3 rounded border border-blue-200 space-y-2">
-                <p className="font-black text-blue-900">Opção 1: Enviar link por E-mail</p>
+            <div className="bg-slate-50 p-3 rounded border border-slate-200 text-xs font-bold text-slate-800 space-y-1">
+              <p><strong>Usuário:</strong> {usuarioResetSenha.nome_completo}</p>
+              <p><strong>E-mail:</strong> {usuarioResetSenha.email}</p>
+              <p><strong>Perfil:</strong> {usuarioResetSenha.perfil_acesso}</p>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              {/* OPÇÃO 1: ENVIAR EMAIL DE REDEFINIÇÃO */}
+              <div className="border p-3 rounded bg-blue-50 border-blue-200 space-y-2">
+                <p className="text-xs font-black text-blue-900">Opção 1: Link de Redefinição via E-mail</p>
+                <p className="text-[11px] text-blue-800 font-bold">Envia um e-mail com instrução e link seguro de alteração de senha para o usuário.</p>
                 <button
+                  type="button"
                   onClick={() => handleEnviarEmailResetSenha(usuarioResetSenha.email)}
-                  className="w-full py-2 bg-blue-700 hover:bg-blue-800 text-white rounded font-black transition-colors"
+                  className="w-full bg-blue-700 hover:bg-blue-800 text-white font-black text-xs py-2 rounded shadow-sm transition-colors"
                 >
-                  ✉️ Enviar E-mail de Redefinição
+                  📧 Enviar E-mail de Redefinição
                 </button>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded border space-y-2">
-                <p className="font-black text-slate-900">Opção 2: Definir Nova Senha Direta</p>
+              {/* OPÇÃO 2: DEFINIÇÃO DIRETA DE NOVA SENHA */}
+              <div className="border p-3 rounded bg-amber-50 border-amber-200 space-y-2">
+                <p className="text-xs font-black text-amber-900">Opção 2: Gravar Nova Senha Manualmente</p>
+                <label className="block text-[11px] font-bold text-amber-900">Digite a nova senha para este usuário:</label>
                 <input
                   type="password"
                   placeholder="Mínimo 6 caracteres"
                   value={novaSenhaInput}
                   onChange={(e) => setNovaSenhaInput(e.target.value)}
-                  className="w-full border p-2 rounded bg-white font-mono"
+                  className="w-full border p-2 rounded text-xs font-bold bg-white text-slate-900"
                 />
                 <button
+                  type="button"
                   onClick={handleAlterarSenhaDireta}
-                  className="w-full py-2 bg-red-700 hover:bg-red-800 text-white rounded font-black transition-colors"
+                  className="w-full bg-amber-700 hover:bg-amber-800 text-white font-black text-xs py-2 rounded shadow-sm transition-colors"
                 >
-                  🔒 Gravar Nova Senha
+                  ⚡ Alterar Senha Diretamente
                 </button>
               </div>
+            </div>
 
-              <div className="flex justify-end pt-2 border-t">
-                <button type="button" onClick={() => { setModalAtivo(null); setUsuarioResetSenha(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-black">
-                  Fechar
-                </button>
-              </div>
+            <div className="flex justify-end pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => { setModalAtivo(null); setUsuarioResetSenha(null); }}
+                className="px-4 py-1.5 border rounded text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
       )}
-
-    </div>
+    </>
   );
 }
