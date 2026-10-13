@@ -251,291 +251,21 @@ export default function Dashboard() {
   // =========================================================
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioSistema | null>(null);
 
-  // BASES DE DADOS INICIAIS
-  const [membros, setMembros] = useState<Membro[]>([
-    {
-      id: '1',
-      matricula: 'GET-2023-01',
-      nome_completo: 'Prof. Dr. Sérgio Oliveira',
-      cpf: '000.111.222-33',
-      email_institucional: 'sergio.oliveira@getecc.edu.br',
-      email_alternativo: 'sergio.prof@gmail.com',
-      instagram: '@sergio.getecc',
-      orcid_link: 'https://orcid.org/0000-0001-2345-6789',
-      lattes_link: 'http://lattes.cnpq.br/1234567890123456',
-      endereco: 'Av. Brasil, 100 - Campina Grande/PB',
-      financiamento: 'Bolsista Produtividade',
-      telefone: '(83) 99999-1111',
-      curso_formacao: 'Medicina / Intensivismo',
-      instituicao: 'Unifacisa / GETECC',
-      categoria: 'Coordenação',
-      funcao_cargo: 'Coordenador Geral',
-      data_ingresso: '2023-01-15',
-      situacao: 'Ativo',
-      historico_afastamentos: [],
-    },
-    {
-      id: '2',
-      matricula: 'GET-2023-02',
-      nome_completo: 'Profa. Dra. Isabelle de Paula',
-      cpf: '444.555.666-77',
-      email_institucional: 'isabelle.paula@getecc.edu.br',
-      email_alternativo: 'isabelle@gmail.com',
-      instagram: '@isabelle.getecc',
-      orcid_link: 'https://orcid.org/0000-0002-9876-5432',
-      lattes_link: 'http://lattes.cnpq.br/6543210987654321',
-      endereco: 'Rua das Flores, 50 - Campina Grande/PB',
-      financiamento: 'Bolsista Pesquisadora',
-      telefone: '(83) 98888-2222',
-      curso_formacao: 'Enfermagem em Emergência',
-      instituicao: 'GETECC / Unifacisa',
-      categoria: 'Diretoria',
-      funcao_cargo: 'Diretora Científica',
-      data_ingresso: '2023-03-10',
-      situacao: 'Ativo',
-      historico_afastamentos: [
-        { id: 'af1', tipo: 'Licença Capacitação', data_inicio: '2025-06-01', data_fim: '2025-07-01', motivo: 'Especialização Internacional' },
-      ],
-    },
-    {
-      id: '3',
-      matricula: 'GET-2024-05',
-      nome_completo: 'Lucas Fernandes Silva',
-      cpf: '888.999.000-11',
-      email_institucional: 'lucas.fernandes@getecc.edu.br',
-      curso_formacao: 'Medicina',
-      instituicao: 'Unifacisa',
-      categoria: 'Estudantes',
-      funcao_cargo: 'Pesquisador Discente',
-      data_ingresso: '2024-02-01',
-      data_desligamento: '2025-12-20',
-      situacao: 'Desligado',
-      historico_afastamentos: [],
-    },
-  ]);
-
-  const [colaboradores, setColaboradores] = useState<ColaboradorExterno[]>([
-    {
-      id: '1',
-      nome: 'Dr. Roberto Alencar',
-      cpf: '111.222.333-44',
-      titulacao: 'Doutor',
-      email: 'roberto.alencar@hospital.gov.br',
-      orcid: '0000-0002-1825-0097',
-      numero_conselho: 'CRM-PB 12.450',
-      afiliacao: 'Hospital de Traumatologia / UFPB',
-    },
-  ]);
-
-  const [colaboradoresFinanceiros, setColaboradoresFinanceiros] = useState<ColaboradorFinanceiro[]>([
-    {
-      id: '1',
-      nome: 'Dra. Amanda Cavalcanti',
-      cpf: '555.666.777-88',
-      titulacao: 'Mestre',
-      email: 'amanda.cavalcanti@gmail.com',
-      orcid: '0000-0003-4411-9988',
-      numero_conselho: 'COREN-PB 88.123',
-      afiliacao: 'Hospital Universitário',
-      evento_ou_artigo: 'XXVIII Congresso Brasileiro de Medicina Intensiva',
-      valor_pago: 'R$ 250,00',
-      status_publicacao: 'Aprovada',
-      data_registro: '2026-08-10',
-    },
-    {
-      id: '2',
-      nome: 'Dr. Carlos Eduardo Lima',
-      cpf: '999.888.777-66',
-      titulacao: 'Especialista',
-      email: 'carlos.eduardo@medicina.com',
-      orcid: '0000-0001-5522-3344',
-      numero_conselho: 'CRM-PB 18.900',
-      afiliacao: 'SAMU Regional',
-      evento_ou_artigo: 'Congresso Nordestino de Emergências Médicas',
-      valor_pago: 'R$ 180,00',
-      status_publicacao: 'Em análise',
-      data_registro: '2026-09-01',
-    },
-  ]);
-
-  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoFinanceira[]>([
-    {
-      id: 'mov-1',
-      descricao: 'Aquisição de Materiais de Simulação',
-      valor: 120.00,
-      tipo: 'Saída',
-      categoria: 'Patrimônio',
-      data: '2026-09-15',
-      observacoes: 'Compra de luvas e gazes para oficina',
-    },
-    {
-      id: 'mov-2',
-      descricao: 'Patrocínio Local para Banner Científico',
-      valor: 300.00,
-      tipo: 'Entrada',
-      categoria: 'Eventos',
-      data: '2026-09-20',
-      observacoes: 'Apoio de livraria acadêmica',
-    },
-  ]);
-
-  const [mensalidades, setMensalidades] = useState<PagamentoMensalidade[]>([
-    { id: 'm1', membro_id: '1', ano: '2026', mes: 9, valor: 30.00, status: 'Pago', data_pagamento: '2026-09-05' },
-    { id: 'm2', membro_id: '1', ano: '2026', mes: 10, valor: 30.00, status: 'Pago', data_pagamento: '2026-10-02' },
-    { id: 'm3', membro_id: '2', ano: '2026', mes: 10, valor: 30.00, status: 'Pago', data_pagamento: '2026-10-05' },
-  ]);
-
-  const [eventosEspeciais, setEventosEspeciais] = useState<PagamentoEventoEspecial[]>([
-    { id: 'ee1', membro_id: '1', evento: 'Day Off', valor: 50.00, status: 'Pago', data_pagamento: '2026-09-10' },
-    { id: 'ee2', membro_id: '2', evento: 'São João', valor: 80.00, status: 'Pago', data_pagamento: '2026-06-12' },
-  ]);
-
-  const [projetos, setProjetos] = useState<ProjetoPesquisa[]>([
-    {
-      id: '1',
-      titulo: 'Avaliação da Resposta Hemodinâmica no Trauma Cranioencefálico Grave',
-      coordenador: 'Prof. Dr. Sérgio Oliveira',
-      linha_pesquisa: 'Neurointensivismo e Trauma Grave',
-      docentes: ['Profa. Dra. Isabelle de Paula'],
-      discentes: ['Lucas Fernandes Silva'],
-      parecer_cep: '5.892.102',
-      caee_cep: '65432123.4.0000.5188',
-      financiamento: 'FAPESQ / CNPq',
-      observacoes: 'Aprovado sem restrições éticas pelo CEP.',
-      status: 'Em execução',
-      artigos_derivados: [
-        {
-          id: 'art1',
-          titulo: 'Manejo Inicial do TCE em APH',
-          revista: 'Journal of Emergency Health',
-          qualis_jcr_cite: 'Qualis A1 / JCR 3.5',
-          status: 'publicado',
-          anexos: [],
-        },
-      ],
-      anexos: [],
-    },
-  ]);
-
-  const [demandas, setDemandas] = useState<Demanda[]>([
-    {
-      id: '1',
-      codigo: 'DEM-2026-01',
-      titulo: 'Submissão do Relatório Anual ao NUPEX',
-      descricao: 'Compilação de produções científicas e atas do grupo.',
-      responsavel_nome: 'Prof. Dr. Sérgio Oliveira',
-      prazo_final: '2026-10-30',
-      prioridade: 'Urgente',
-      status: 'Em andamento',
-      anexos: [],
-    },
-    {
-      id: '2',
-      codigo: 'DEM-2026-02',
-      titulo: 'Revisão do Protocolo de Atendimento em Parada Cardiorrespiratória',
-      descricao: 'Atualização das diretrizes 2026.',
-      responsavel_nome: 'Profa. Dra. Isabelle de Paula',
-      prazo_final: '2026-09-15',
-      prioridade: 'Alta',
-      status: 'Com pendências',
-      anexos: [],
-    },
-  ]);
-
-  const [producoes, setProducoes] = useState<ProducaoCientifica[]>([
-    {
-      id: '1',
-      categoria_producao: 'Periódico',
-      tipo_producao: 'Artigo Científico',
-      titulo: 'Protetores de Vias Aéreas no Atendimento Pré-Hospitalar',
-      evento_ou_revista: 'Revista Brasileira de Medicina Intensiva',
-      autor_principal: 'Sérgio Oliveira',
-      coautores: 'Isabelle de Paula, Lucas Silva',
-      ano_publicacao: '2026',
-      qualis_doi: '10.1016/j.rbmi.2026.04',
-      status: 'Publicado',
-    },
-    {
-      id: '2',
-      categoria_producao: 'Periódico',
-      tipo_producao: 'Artigo Científico',
-      titulo: 'Diretrizes de Ventilação Mecânica no Paciente Crítico',
-      evento_ou_revista: 'Journal of Emergency Medicine',
-      autor_principal: 'Isabelle de Paula',
-      coautores: 'Sérgio Oliveira',
-      ano_publicacao: '2026',
-      qualis_doi: '10.1016/j.jem.2026.08',
-      status: 'Submetido',
-    },
-  ]);
-
-  const [metasAnuais, setMetasAnuais] = useState<MetaAnualProducao[]>([
-    { ano: '2026', meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 },
-  ]);
-
-  const [reunioes, setReunioes] = useState<ReuniaoCientifica[]>([
-    {
-      id: '1',
-      titulo: 'I Encontro Científico GETECC - Discussão de Casos Clínicos',
-      data: '2026-10-01',
-      horario: '18:00 - 20:00',
-      pauta: 'Análise de Manejo de TCE no Pré-Hospitalar',
-      presencas: [
-        { membro_id: '1', membro_nome: 'Prof. Dr. Sérgio Oliveira', status: 'presente' },
-        { membro_id: '2', membro_nome: 'Profa. Dra. Isabelle de Paula', status: 'presente' },
-      ],
-    },
-  ]);
-
-  const [patrimonio, setPatrimonio] = useState<PatrimonioProduto[]>([
-    {
-      id: '1',
-      nome: 'Manequim Avançado de Intubação e RCP',
-      descricao: 'Simulador clínico com resposta tátil para treinamento de procedimentos.',
-      quantidade: 2,
-      estado_conservacao: 'Excelente',
-      responsavel: 'Profa. Dra. Isabelle de Paula',
-    },
-  ]);
-
-  const [marketing, setMarketing] = useState<MarketingItem[]>([
-    {
-      id: '1',
-      titulo: 'Divulgação do II Simpósio de Cuidados Críticos',
-      canal: 'Instagram',
-      responsavel: 'Isabelle de Paula',
-      data_prevista: '2026-10-20',
-      status: 'Em Produção',
-      legenda: 'Inscrições abertas para o II Simpósio de Cuidados Críticos GETECC.',
-      artes: [],
-    },
-  ]);
-
-  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([
-    {
-      id: '1',
-      nome_completo: 'Administrador Geral',
-      email: 'admin@getecc.edu.br',
-      perfil_acesso: 'Administrador',
-      situacao: 'Ativo',
-      permissoes: {
-        membros: { visualizar: true, editar: true },
-        colaboradores: { visualizar: true, editar: true },
-        projetos: { visualizar: true, editar: true },
-        demandas: { visualizar: true, editar: true },
-        pendencias: { visualizar: true, editar: true },
-        producoes: { visualizar: true, editar: true },
-        reunioes: { visualizar: true, editar: true },
-        patrimonio: { visualizar: true, editar: true },
-        marketing: { visualizar: true, editar: true },
-        financeiro: { visualizar: true, editar: true },
-        usuarios: { visualizar: true, editar: true },
-        relatorios: { visualizar: true, editar: true },
-        configuracoes: { visualizar: true, editar: true },
-      },
-    },
-  ]);
-
+  // BASES DE DADOS SINCRONIZADAS COM O SUPABASE
+  const [membros, setMembros] = useState<Membro[]>([]);
+  const [colaboradores, setColaboradores] = useState<ColaboradorExterno[]>([]);
+  const [colaboradoresFinanceiros, setColaboradoresFinanceiros] = useState<ColaboradorFinanceiro[]>([]);
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoFinanceira[]>([]);
+  const [mensalidades, setMensalidades] = useState<PagamentoMensalidade[]>([]);
+  const [eventosEspeciais, setEventosEspeciais] = useState<PagamentoEventoEspecial[]>([]);
+  const [projetos, setProjetos] = useState<ProjetoPesquisa[]>([]);
+  const [demandas, setDemandas] = useState<Demanda[]>([]);
+  const [producoes, setProducoes] = useState<ProducaoCientifica[]>([]);
+  const [metasAnuais, setMetasAnuais] = useState<MetaAnualProducao[]>([]);
+  const [reunioes, setReunioes] = useState<ReuniaoCientifica[]>([]);
+  const [patrimonio, setPatrimonio] = useState<PatrimonioProduto[]>([]);
+  const [marketing, setMarketing] = useState<MarketingItem[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([]);
   const [historicoAuditoria, setHistoricoAuditoria] = useState<ItemAuditoria[]>([]);
 
   // BASE CUMULATIVA E IMPORTAÇÕES
@@ -618,16 +348,66 @@ export default function Dashboard() {
   const [novaSenhaInput, setNovaSenhaInput] = useState('');
 
   // ==========================================
-  // CARREGAR USUÁRIOS E IDENTIFICAR LOGADO
+  // CARREGAR TODAS AS TABELAS DO SUPABASE AO INICIAR
   // ==========================================
   useEffect(() => {
-    const carregarUsuarios = async () => {
-      const { data, error } = await supabase.from('usuarios').select('*');
-      if (!error && data && data.length > 0) {
-        setUsuarios(data);
+    const carregarTudoDoSupabase = async () => {
+      try {
+        const [
+          { data: uData },
+          { data: mData },
+          { data: cData },
+          { data: cfData },
+          { data: movData },
+          { data: mensData },
+          { data: evData },
+          { data: pData },
+          { data: demData },
+          { data: prodData },
+          { data: metaData },
+          { data: reuData },
+          { data: patData },
+          { data: mktData },
+          { data: audData }
+        ] = await Promise.all([
+          supabase.from('usuarios').select('*'),
+          supabase.from('membros').select('*'),
+          supabase.from('colaboradores').select('*'),
+          supabase.from('colaboradores_financeiros').select('*'),
+          supabase.from('movimentacoes').select('*'),
+          supabase.from('mensalidades').select('*'),
+          supabase.from('eventos_especiais').select('*'),
+          supabase.from('projetos').select('*'),
+          supabase.from('demandas').select('*'),
+          supabase.from('producoes').select('*'),
+          supabase.from('metas_anuais').select('*'),
+          supabase.from('reunioes').select('*'),
+          supabase.from('patrimonio').select('*'),
+          supabase.from('marketing').select('*'),
+          supabase.from('auditoria').select('*')
+        ]);
+
+        if (uData) setUsuarios(uData);
+        if (mData) setMembros(mData);
+        if (cData) setColaboradores(cData);
+        if (cfData) setColaboradoresFinanceiros(cfData);
+        if (movData) setMovimentacoes(movData);
+        if (mensData) setMensalidades(mensData);
+        if (evData) setEventosEspeciais(evData);
+        if (pData) setProjetos(pData);
+        if (demData) setDemandas(demData);
+        if (prodData) setProducoes(prodData);
+        if (metaData) setMetasAnuais(metaData);
+        if (reuData) setReunioes(reuData);
+        if (patData) setPatrimonio(patData);
+        if (mktData) setMarketing(mktData);
+        if (audData) setHistoricoAuditoria(audData);
+      } catch (err) {
+        console.error("Erro ao carregar dados do Supabase:", err);
       }
     };
-    carregarUsuarios();
+
+    carregarTudoDoSupabase();
   }, []);
 
   useEffect(() => {
@@ -648,11 +428,21 @@ export default function Dashboard() {
     return usuarioLogado.permissoes?.[abaKey]?.[acao] ?? false;
   };
 
-  const registrarAuditoria = (operacao: string, modulo: string, detalhes: string) => {
-    setHistoricoAuditoria((prev) => [
-      { id: String(Date.now()), usuario_nome: usuarioLogado?.nome_completo || 'Sistema', operacao, modulo, detalhes, data_hora: new Date().toLocaleString('pt-BR') },
-      ...prev,
-    ]);
+  const registrarAuditoria = async (operacao: string, modulo: string, detalhes: string) => {
+    const item: ItemAuditoria = {
+      id: String(Date.now()),
+      usuario_nome: usuarioLogado?.nome_completo || 'Sistema',
+      operacao,
+      modulo,
+      detalhes,
+      data_hora: new Date().toLocaleString('pt-BR'),
+    };
+    setHistoricoAuditoria((prev) => [item, ...prev]);
+    try {
+      await supabase.from('auditoria').upsert(item);
+    } catch (err) {
+      console.error('Erro ao gravar log de auditoria no Supabase:', err);
+    }
   };
 
   const salvarUsuarioSupabase = async (e: React.FormEvent) => {
@@ -892,55 +682,63 @@ export default function Dashboard() {
     return atendeTipo && atendeCategoria && atendeBusca && atendeData;
   });
 
-  const salvarEdicaoMensalidade = () => {
+  const salvarEdicaoMensalidade = async () => {
     const { membro_id, ano, mes, valor, status, data_pagamento } = formEdicaoMensalidade;
     const existe = mensalidades.find((m) => m.membro_id === membro_id && m.ano === ano && m.mes === mes);
 
-    if (existe) {
-      setMensalidades(
-        mensalidades.map((m) =>
-          m.id === existe.id ? { ...m, valor, status, data_pagamento: status === 'Pago' ? data_pagamento : undefined } : m
-        )
-      );
-    } else {
-      const nova: PagamentoMensalidade = {
-        id: String(Date.now()),
-        membro_id,
-        ano,
-        mes,
-        valor,
-        status,
-        data_pagamento: status === 'Pago' ? data_pagamento : undefined,
-      };
-      setMensalidades([...mensalidades, nova]);
+    const nova: PagamentoMensalidade = {
+      id: existe ? existe.id : String(Date.now()),
+      membro_id,
+      ano,
+      mes,
+      valor,
+      status,
+      data_pagamento: status === 'Pago' ? data_pagamento : undefined,
+    };
+
+    try {
+      const { error } = await supabase.from('mensalidades').upsert(nova);
+      if (error) throw error;
+
+      if (existe) {
+        setMensalidades(mensalidades.map((m) => (m.id === existe.id ? nova : m)));
+      } else {
+        setMensalidades([...mensalidades, nova]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Lançamento Mensalidade', 'Financeiro', `Mensalidade ${mes}/${ano} atualizada para o membro ID #${membro_id}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar mensalidade no Supabase: ${err.message || err}`);
     }
-    setModalAtivo(null);
-    registrarAuditoria('Lançamento Mensalidade', 'Financeiro', `Mensalidade ${mes}/${ano} atualizada para o membro ID #${membro_id}`);
   };
 
-  const salvarEdicaoEventoEspecial = () => {
+  const salvarEdicaoEventoEspecial = async () => {
     const { membro_id, evento, valor, status, data_pagamento } = formEdicaoEventoEspecial;
     const existe = eventosEspeciais.find((e) => e.membro_id === membro_id && e.evento === evento);
 
-    if (existe) {
-      setEventosEspeciais(
-        eventosEspeciais.map((e) =>
-          e.id === existe.id ? { ...e, valor, status, data_pagamento: status === 'Pago' ? data_pagamento : undefined } : e
-        )
-      );
-    } else {
-      const nova: PagamentoEventoEspecial = {
-        id: String(Date.now()),
-        membro_id,
-        evento,
-        valor,
-        status,
-        data_pagamento: status === 'Pago' ? data_pagamento : undefined,
-      };
-      setEventosEspeciais([...eventosEspeciais, nova]);
+    const nova: PagamentoEventoEspecial = {
+      id: existe ? existe.id : String(Date.now()),
+      membro_id,
+      evento,
+      valor,
+      status,
+      data_pagamento: status === 'Pago' ? data_pagamento : undefined,
+    };
+
+    try {
+      const { error } = await supabase.from('eventos_especiais').upsert(nova);
+      if (error) throw error;
+
+      if (existe) {
+        setEventosEspeciais(eventosEspeciais.map((e) => (e.id === existe.id ? nova : e)));
+      } else {
+        setEventosEspeciais([...eventosEspeciais, nova]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Lançamento Evento', 'Financeiro', `Taxa ${evento} atualizada para o membro ID #${membro_id}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar evento no Supabase: ${err.message || err}`);
     }
-    setModalAtivo(null);
-    registrarAuditoria('Lançamento Evento', 'Financeiro', `Taxa ${evento} atualizada para o membro ID #${membro_id}`);
   };
 
   const handleProcessarArquivoEmMassa = (e: React.ChangeEvent<HTMLInputElement>, destino: 'producoes' | 'relatorios') => {
@@ -959,7 +757,7 @@ export default function Dashboard() {
     reader.readAsText(file);
   };
 
-  const handleCargaMassaProducoes = (e: React.FormEvent) => {
+  const handleCargaMassaProducoes = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!textoCargaMassaProducao.trim()) return;
     const linhas = textoCargaMassaProducao.split('\n');
@@ -985,11 +783,18 @@ export default function Dashboard() {
       }
     });
 
-    setProducoes([...novasProds, ...producoes]);
-    setTextoCargaMassaProducao('');
-    setModalAtivo(null);
-    registrarAuditoria('Importação em Massa', 'Produções', `Importou ${novasProds.length} produções científicas.`);
-    alert(`Sucesso! ${novasProds.length} produções foram adicionadas à base.`);
+    try {
+      const { error } = await supabase.from('producoes').upsert(novasProds);
+      if (error) throw error;
+
+      setProducoes([...novasProds, ...producoes]);
+      setTextoCargaMassaProducao('');
+      setModalAtivo(null);
+      registrarAuditoria('Importação em Massa', 'Produções', `Importou ${novasProds.length} produções científicas.`);
+      alert(`Sucesso! ${novasProds.length} produções foram adicionadas à base.`);
+    } catch (err: any) {
+      alert(`Erro ao salvar no Supabase: ${err.message || err}`);
+    }
   };
 
   const handleProcessarBaseRelatorioCumulativa = (e: React.FormEvent) => {
@@ -1152,23 +957,36 @@ export default function Dashboard() {
     return Object.values(mapaFaltas);
   };
 
-  const handleExcluir = (categoria: string, id: string) => {
+  const handleExcluir = async (categoria: string, id: string) => {
     if (!temPermissao(categoria, 'editar')) {
       alert('Você não possui permissão para excluir registros neste módulo.');
       return;
     }
     if (confirm(`Confirmar exclusão no módulo ${categoria}?`)) {
-      if (categoria === 'membros') setMembros(membros.filter((m) => m.id !== id));
-      if (categoria === 'colaboradores') setColaboradores(colaboradores.filter((c) => c.id !== id));
-      if (categoria === 'colaboradoresFinanceiros') setColaboradoresFinanceiros(colaboradoresFinanceiros.filter((c) => c.id !== id));
-      if (categoria === 'movimentacoes') setMovimentacoes(movimentacoes.filter((m) => m.id !== id));
-      if (categoria === 'projetos') setProjetos(projetos.filter((p) => p.id !== id));
-      if (categoria === 'demandas') setDemandas(demandas.filter((d) => d.id !== id));
-      if (categoria === 'producoes') setProducoes(producoes.filter((p) => p.id !== id));
-      if (categoria === 'patrimonio') setPatrimonio(patrimonio.filter((p) => p.id !== id));
-      if (categoria === 'marketing') setMarketing(marketing.filter((m) => m.id !== id));
-      if (categoria === 'usuarios') setUsuarios(usuarios.filter((u) => u.id !== id));
-      registrarAuditoria('Exclusão', categoria, `Registro ID #${id} excluído`);
+      try {
+        let tabela = categoria;
+        if (categoria === 'colaboradoresFinanceiros') tabela = 'colaboradores_financeiros';
+        if (categoria === 'eventosEspeciais') tabela = 'eventos_especiais';
+        if (categoria === 'metasAnuais') tabela = 'metas_anuais';
+
+        const { error } = await supabase.from(tabela).delete().eq('id', id);
+        if (error) throw error;
+
+        if (categoria === 'membros') setMembros(membros.filter((m) => m.id !== id));
+        if (categoria === 'colaboradores') setColaboradores(colaboradores.filter((c) => c.id !== id));
+        if (categoria === 'colaboradoresFinanceiros') setColaboradoresFinanceiros(colaboradoresFinanceiros.filter((c) => c.id !== id));
+        if (categoria === 'movimentacoes') setMovimentacoes(movimentacoes.filter((m) => m.id !== id));
+        if (categoria === 'projetos') setProjetos(projetos.filter((p) => p.id !== id));
+        if (categoria === 'demandas') setDemandas(demandas.filter((d) => d.id !== id));
+        if (categoria === 'producoes') setProducoes(producoes.filter((p) => p.id !== id));
+        if (categoria === 'patrimonio') setPatrimonio(patrimonio.filter((p) => p.id !== id));
+        if (categoria === 'marketing') setMarketing(marketing.filter((m) => m.id !== id));
+        if (categoria === 'usuarios') setUsuarios(usuarios.filter((u) => u.id !== id));
+
+        registrarAuditoria('Exclusão', categoria, `Registro ID #${id} excluído`);
+      } catch (err: any) {
+        alert(`Erro ao excluir do Supabase: ${err.message || err}`);
+      }
     }
   };
 
@@ -1754,7 +1572,17 @@ export default function Dashboard() {
                               {temPermissao('demandas', 'editar') && (
                                 <td className="p-3 text-right space-x-1">
                                   {d.status !== 'Concluída' && (
-                                    <button onClick={() => setDemandas(demandas.map((item) => (item.id === d.id ? { ...item, status: 'Concluída' } : item)))} className="bg-emerald-600 text-white font-black px-2 py-1 rounded">✓ Marcar Concluída</button>
+                                    <button onClick={async () => {
+                                      const dAtualizada: Demanda = { ...d, status: 'Concluída' };
+                                      try {
+                                        const { error } = await supabase.from('demandas').upsert(dAtualizada);
+                                        if (error) throw error;
+                                        setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
+                                        registrarAuditoria('Conclusão Demanda', 'Demandas', `Demanda ${d.codigo} concluída`);
+                                      } catch (err: any) {
+                                        alert(`Erro ao atualizar demanda: ${err.message || err}`);
+                                      }
+                                    }} className="bg-emerald-600 text-white font-black px-2 py-1 rounded">✓ Marcar Concluída</button>
                                   )}
                                   <button onClick={() => { setFormDemanda(d); setModalAtivo('demanda'); }} className="bg-slate-200 text-slate-900 font-black px-2 py-1 rounded border border-slate-400">Editar</button>
                                   <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
@@ -1792,7 +1620,17 @@ export default function Dashboard() {
                           <p className="text-red-700">Responsável: {d.responsavel_nome} | Prazo: {d.prazo_final}</p>
                         </div>
                         {temPermissao('pendencias', 'editar') && (
-                          <button onClick={() => setDemandas(demandas.map((item) => (item.id === d.id ? { ...item, status: 'Concluída' } : item)))} className="bg-emerald-600 text-white font-black px-3 py-1.5 rounded">
+                          <button onClick={async () => {
+                            const dAtualizada: Demanda = { ...d, status: 'Concluída' };
+                            try {
+                              const { error } = await supabase.from('demandas').upsert(dAtualizada);
+                              if (error) throw error;
+                              setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
+                              registrarAuditoria('Conclusão Demanda', 'Pendências', `Demanda ${d.codigo} resolvida`);
+                            } catch (err: any) {
+                              alert(`Erro ao resolver demanda: ${err.message || err}`);
+                            }
+                          }} className="bg-emerald-600 text-white font-black px-3 py-1.5 rounded">
                             ✓ Resolver
                           </button>
                         )}
@@ -2601,7 +2439,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 space-y-4 border border-slate-300 max-h-[90vh] overflow-y-auto text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formMembro.id ? 'Editar Integrante' : 'Cadastrar Integrante do GETECC'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: Membro = {
                 id: formMembro.id || String(Date.now()),
@@ -2625,9 +2463,18 @@ export default function Dashboard() {
                 situacao: formMembro.data_desligamento ? 'Desligado' : (formMembro.situacao as any || 'Ativo'),
                 historico_afastamentos: formMembro.historico_afastamentos || [],
               };
-              if (formMembro.id) setMembros(membros.map((m) => (m.id === formMembro.id ? novo : m)));
-              else setMembros([...membros, novo]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('membros').upsert(novo);
+                if (error) throw error;
+
+                if (formMembro.id) setMembros(membros.map((m) => (m.id === formMembro.id ? novo : m)));
+                else setMembros([...membros, novo]);
+                setModalAtivo(null);
+                registrarAuditoria(formMembro.id ? 'Edição Membro' : 'Cadastro Membro', 'Membros', `Membro ${novo.nome_completo} salvo`);
+              } catch (err: any) {
+                alert(`Erro ao salvar membro no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -2727,7 +2574,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">Registrar Licença / Afastamento</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novoAf: RegistroAfastamento = {
                 id: String(Date.now()),
@@ -2741,8 +2588,17 @@ export default function Dashboard() {
                 situacao: 'Em Afastamento/Licença',
                 historico_afastamentos: [...(formMembro.historico_afastamentos || []), novoAf],
               };
-              setMembros(membros.map((m) => (m.id === membroAtualizado.id ? membroAtualizado : m)));
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('membros').upsert(membroAtualizado);
+                if (error) throw error;
+
+                setMembros(membros.map((m) => (m.id === membroAtualizado.id ? membroAtualizado : m)));
+                setModalAtivo(null);
+                registrarAuditoria('Licença Membro', 'Membros', `Licença para ${membroAtualizado.nome_completo} gravada`);
+              } catch (err: any) {
+                alert(`Erro ao salvar licença no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Tipo de Licença / Afastamento</label>
@@ -2776,7 +2632,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formColaborador.id ? 'Editar Colaborador' : 'Cadastrar Colaborador Externo'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: ColaboradorExterno = {
                 id: formColaborador.id || String(Date.now()),
@@ -2788,9 +2644,18 @@ export default function Dashboard() {
                 numero_conselho: formColaborador.numero_conselho || '',
                 afiliacao: formColaborador.afiliacao || '',
               };
-              if (formColaborador.id) setColaboradores(colaboradores.map((c) => (c.id === formColaborador.id ? novo : c)));
-              else setColaboradores([...colaboradores, novo]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('colaboradores').upsert(novo);
+                if (error) throw error;
+
+                if (formColaborador.id) setColaboradores(colaboradores.map((c) => (c.id === formColaborador.id ? novo : c)));
+                else setColaboradores([...colaboradores, novo]);
+                setModalAtivo(null);
+                registrarAuditoria(formColaborador.id ? 'Edição Colaborador' : 'Cadastro Colaborador', 'Colaboradores', `Colaborador ${novo.nome} salvo`);
+              } catch (err: any) {
+                alert(`Erro ao salvar colaborador no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Nome Completo</label>
@@ -2843,7 +2708,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formColaboradorFinanceiro.id ? 'Editar Colaborador / Publicação' : 'Cadastrar Colaborador & Publicação'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: ColaboradorFinanceiro = {
                 id: formColaboradorFinanceiro.id || String(Date.now()),
@@ -2859,9 +2724,18 @@ export default function Dashboard() {
                 status_publicacao: formColaboradorFinanceiro.status_publicacao as any || 'Em análise',
                 data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
               };
-              if (formColaboradorFinanceiro.id) setColaboradoresFinanceiros(colaboradoresFinanceiros.map((c) => (c.id === formColaboradorFinanceiro.id ? novo : c)));
-              else setColaboradoresFinanceiros([...colaboradoresFinanceiros, novo]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('colaboradores_financeiros').upsert(novo);
+                if (error) throw error;
+
+                if (formColaboradorFinanceiro.id) setColaboradoresFinanceiros(colaboradoresFinanceiros.map((c) => (c.id === formColaboradorFinanceiro.id ? novo : c)));
+                else setColaboradoresFinanceiros([...colaboradoresFinanceiros, novo]);
+                setModalAtivo(null);
+                registrarAuditoria(formColaboradorFinanceiro.id ? 'Edição Colaborador Fin.' : 'Cadastro Colaborador Fin.', 'Colaboradores', `Colaborador financeiro ${novo.nome} salvo`);
+              } catch (err: any) {
+                alert(`Erro ao salvar no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Nome Completo</label>
@@ -2924,7 +2798,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-5 space-y-4 border border-slate-300 max-h-[90vh] overflow-y-auto text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formProjeto.id ? 'Editar Projeto de Pesquisa' : 'Cadastrar Projeto de Pesquisa'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: ProjetoPesquisa = {
                 id: formProjeto.id || String(Date.now()),
@@ -2941,9 +2815,18 @@ export default function Dashboard() {
                 artigos_derivados: formProjeto.artigos_derivados || [],
                 anexos: formProjeto.anexos || [],
               };
-              if (formProjeto.id) setProjetos(projetos.map((p) => (p.id === formProjeto.id ? novo : p)));
-              else setProjetos([...projetos, novo]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('projetos').upsert(novo);
+                if (error) throw error;
+
+                if (formProjeto.id) setProjetos(projetos.map((p) => (p.id === formProjeto.id ? novo : p)));
+                else setProjetos([...projetos, novo]);
+                setModalAtivo(null);
+                registrarAuditoria(formProjeto.id ? 'Edição Projeto' : 'Cadastro Projeto', 'Projetos', `Projeto ${novo.titulo} salvo`);
+              } catch (err: any) {
+                alert(`Erro ao salvar projeto no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Título do Projeto</label>
@@ -3024,7 +2907,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formDemanda.id ? 'Editar Demanda' : 'Cadastrar Demanda'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const nova: Demanda = {
                 id: formDemanda.id || String(Date.now()),
@@ -3037,9 +2920,18 @@ export default function Dashboard() {
                 status: formDemanda.status as any || 'Em andamento',
                 anexos: formDemanda.anexos || [],
               };
-              if (formDemanda.id) setDemandas(demandas.map((d) => (d.id === formDemanda.id ? nova : d)));
-              else setDemandas([nova, ...demandas]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('demandas').upsert(nova);
+                if (error) throw error;
+
+                if (formDemanda.id) setDemandas(demandas.map((d) => (d.id === formDemanda.id ? nova : d)));
+                else setDemandas([nova, ...demandas]);
+                setModalAtivo(null);
+                registrarAuditoria(formDemanda.id ? 'Edição Demanda' : 'Cadastro Demanda', 'Demandas', `Demanda ${nova.codigo} salva`);
+              } catch (err: any) {
+                alert(`Erro ao salvar demanda no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Título da Demanda</label>
@@ -3093,7 +2985,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-5 space-y-4 border border-slate-300 text-xs max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formProducao.id ? 'Editar Produção' : 'Cadastrar Produção Científica'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const nova: ProducaoCientifica = {
                 id: formProducao.id || String(Date.now()),
@@ -3107,9 +2999,18 @@ export default function Dashboard() {
                 qualis_doi: formProducao.qualis_doi || '',
                 status: formProducao.status as any || 'Publicado',
               };
-              if (formProducao.id) setProducoes(producoes.map((p) => (p.id === formProducao.id ? nova : p)));
-              else setProducoes([nova, ...producoes]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('producoes').upsert(nova);
+                if (error) throw error;
+
+                if (formProducao.id) setProducoes(producoes.map((p) => (p.id === formProducao.id ? nova : p)));
+                else setProducoes([nova, ...producoes]);
+                setModalAtivo(null);
+                registrarAuditoria(formProducao.id ? 'Edição Produção' : 'Cadastro Produção', 'Produções', `Produção ${nova.titulo} salva`);
+              } catch (err: any) {
+                alert(`Erro ao salvar produção no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -3208,7 +3109,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">🎯 Cadastrar / Ajustar Metas Anuais</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const metaNova: MetaAnualProducao = {
                 ano: formMetaAnual.ano || '2026',
@@ -3216,10 +3117,19 @@ export default function Dashboard() {
                 meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados) || 1,
                 meta_resumos: Number(formMetaAnual.meta_resumos) || 1,
               };
-              const existe = metasAnuais.some((m) => m.ano === metaNova.ano);
-              if (existe) setMetasAnuais(metasAnuais.map((m) => (m.ano === metaNova.ano ? metaNova : m)));
-              else setMetasAnuais([...metasAnuais, metaNova]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('metas_anuais').upsert(metaNova);
+                if (error) throw error;
+
+                const existe = metasAnuais.some((m) => m.ano === metaNova.ano);
+                if (existe) setMetasAnuais(metasAnuais.map((m) => (m.ano === metaNova.ano ? metaNova : m)));
+                else setMetasAnuais([...metasAnuais, metaNova]);
+                setModalAtivo(null);
+                registrarAuditoria('Cadastro Meta', 'Painel', `Metas para o ano ${metaNova.ano} salvas`);
+              } catch (err: any) {
+                alert(`Erro ao salvar metas no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Ano de Referência</label>
@@ -3251,7 +3161,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-5 space-y-4 border border-slate-300 text-xs max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">Cadastrar Encontro & Chamada Presencial</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const nova: ReuniaoCientifica = {
                 id: String(Date.now()),
@@ -3261,8 +3171,17 @@ export default function Dashboard() {
                 pauta: formReuniao.pauta || '',
                 presencas: membrosAtivos.map((m) => ({ membro_id: m.id, membro_nome: m.nome_completo, status: presencasChamada[m.id] || 'falta' })),
               };
-              setReunioes([nova, ...reunioes]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('reunioes').upsert(nova);
+                if (error) throw error;
+
+                setReunioes([nova, ...reunioes]);
+                setModalAtivo(null);
+                registrarAuditoria('Cadastro Reunião', 'Reuniões', `Reunião ${nova.titulo} salva`);
+              } catch (err: any) {
+                alert(`Erro ao salvar reunião no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <input type="text" placeholder="Nome do Encontro" required value={formReuniao.titulo || ''} onChange={(e) => setFormReuniao({ ...formReuniao, titulo: e.target.value })} className="w-full border p-2 rounded font-bold text-slate-900" />
               <input type="text" placeholder="Horário (ex: 18:00 - 20:00)" value={formReuniao.horario || ''} onChange={(e) => setFormReuniao({ ...formReuniao, horario: e.target.value })} className="w-full border p-2 rounded font-bold text-slate-900" />
@@ -3296,7 +3215,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formPatrimonio.id ? 'Editar Item' : 'Cadastrar Patrimônio ou Produto'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: PatrimonioProduto = {
                 id: formPatrimonio.id || String(Date.now()),
@@ -3307,9 +3226,18 @@ export default function Dashboard() {
                 estado_conservacao: formPatrimonio.estado_conservacao as any || 'Excelente',
                 responsavel: formPatrimonio.responsavel || 'GETECC',
               };
-              if (formPatrimonio.id) setPatrimonio(patrimonio.map((p) => (p.id === formPatrimonio.id ? novo : p)));
-              else setPatrimonio([novo, ...patrimonio]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('patrimonio').upsert(novo);
+                if (error) throw error;
+
+                if (formPatrimonio.id) setPatrimonio(patrimonio.map((p) => (p.id === formPatrimonio.id ? novo : p)));
+                else setPatrimonio([novo, ...patrimonio]);
+                setModalAtivo(null);
+                registrarAuditoria(formPatrimonio.id ? 'Edição Patrimônio' : 'Cadastro Patrimônio', 'Patrimônio', `Item ${novo.nome} salvo`);
+              } catch (err: any) {
+                alert(`Erro ao salvar patrimônio no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Nome do Item</label>
@@ -3352,7 +3280,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">{formMarketing.id ? 'Editar Ação' : 'Cadastrar Ação de Marketing'}</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const nova: MarketingItem = {
                 id: formMarketing.id || String(Date.now()),
@@ -3364,9 +3292,18 @@ export default function Dashboard() {
                 legenda: formMarketing.legenda || '',
                 artes: formMarketing.artes || [],
               };
-              if (formMarketing.id) setMarketing(marketing.map((m) => (m.id === formMarketing.id ? nova : m)));
-              else setMarketing([nova, ...marketing]);
-              setModalAtivo(null);
+
+              try {
+                const { error } = await supabase.from('marketing').upsert(nova);
+                if (error) throw error;
+
+                if (formMarketing.id) setMarketing(marketing.map((m) => (m.id === formMarketing.id ? nova : m)));
+                else setMarketing([nova, ...marketing]);
+                setModalAtivo(null);
+                registrarAuditoria(formMarketing.id ? 'Edição Marketing' : 'Cadastro Marketing', 'Marketing', `Ação ${nova.titulo} salva`);
+              } catch (err: any) {
+                alert(`Erro ao salvar marketing no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Título da Ação</label>
@@ -3421,7 +3358,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-300 text-xs">
             <h3 className="font-black text-slate-900 text-base border-b pb-2">➕ Cadastrar Lançamento de Caixa</h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const nova: MovimentacaoFinanceira = {
                 id: String(Date.now()),
@@ -3432,9 +3369,17 @@ export default function Dashboard() {
                 data: formMovimentacao.data || new Date().toISOString().split('T')[0],
                 observacoes: formMovimentacao.observacoes || '',
               };
-              setMovimentacoes([nova, ...movimentacoes]);
-              setModalAtivo(null);
-              registrarAuditoria('Lançamento Caixa', 'Financeiro', `Registrou ${nova.tipo} de R$ ${nova.valor} (${nova.descricao})`);
+
+              try {
+                const { error } = await supabase.from('movimentacoes').upsert(nova);
+                if (error) throw error;
+
+                setMovimentacoes([nova, ...movimentacoes]);
+                setModalAtivo(null);
+                registrarAuditoria('Lançamento Caixa', 'Financeiro', `Registrou ${nova.tipo} de R$ ${nova.valor} (${nova.descricao})`);
+              } catch (err: any) {
+                alert(`Erro ao salvar lançamento no Supabase: ${err.message || err}`);
+              }
             }} className="space-y-3">
               <div>
                 <label className="block font-black text-slate-900 mb-1">Descrição do Lançamento</label>
