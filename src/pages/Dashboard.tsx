@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 
 // ==========================================
 // INTERFACES E TIPOS DE DADOS COMPLETOS DO GETECC
@@ -246,9 +247,7 @@ export default function Dashboard() {
     'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'configuracoes'
   >('painel');
 
-  // =========================================================
   // USUÁRIO LOGADO E VERIFICAÇÃO DE PERMISSÕES
-  // =========================================================
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioSistema | null>(null);
 
   // BASES DE DADOS SINCRONIZADAS COM O SUPABASE
@@ -347,9 +346,7 @@ export default function Dashboard() {
   const [usuarioResetSenha, setUsuarioResetSenha] = useState<UsuarioSistema | null>(null);
   const [novaSenhaInput, setNovaSenhaInput] = useState('');
 
-  // ==========================================
-  // CARREGAR TODAS AS TABELAS DO SUPABASE AO INICIAR
-  // ==========================================
+  // CARREGAR DADOS DO SUPABASE E ATIVAR REALTIME
   useEffect(() => {
     const carregarTudoDoSupabase = async () => {
       try {
@@ -408,6 +405,23 @@ export default function Dashboard() {
     };
 
     carregarTudoDoSupabase();
+
+    // CANAL DE REALTIME PARA ATUALIZAÇÕES AUTOMÁTICAS
+    const canal = supabase
+      .channel('sincronizacao-global')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          console.log('🔔 Alteração registada no Supabase:', payload);
+          carregarTudoDoSupabase();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
   }, []);
 
   useEffect(() => {
@@ -421,7 +435,6 @@ export default function Dashboard() {
     carregarUsuarioAtual();
   }, [usuarios]);
 
-  // FUNÇÃO AUXILIAR DE CHECK DE PERMISSÃO
   const temPermissao = (abaKey: string, acao: 'visualizar' | 'editar'): boolean => {
     if (!usuarioLogado) return true;
     if (usuarioLogado.perfil_acesso === 'Administrador') return true;
@@ -741,20 +754,51 @@ export default function Dashboard() {
     }
   };
 
+  // PROCESSAMENTO DE ARQUIVOS EXCEL EM BINÁRIO
   const handleProcessarArquivoEmMassa = (e: React.ChangeEvent<HTMLInputElement>, destino: 'producoes' | 'relatorios') => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
     const reader = new FileReader();
 
-    reader.onload = (event) => {
-      const conteudo = event.target?.result as string;
-      if (!conteudo) return;
-      if (destino === 'producoes') setTextoCargaMassaProducao(conteudo);
-      else setTextoCSVRelatorio(conteudo);
-      alert(`Arquivo "${file.name}" carregado com sucesso!`);
+    reader.onload = async (event) => {
+      try {
+        const buffer = event.target?.result as ArrayBuffer;
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+        const linhasBrutas: any[] = XLSX.utils.sheet_to_json(primeiraAba);
+
+        const sanitizar = (val: any) => typeof val === 'string' ? val.replace(/\u0000/g, '').trim() : val;
+
+        if (destino === 'producoes') {
+          const dadosLimpos = linhasBrutas.map((linha) => {
+            const item: Record<string, any> = {};
+            for (const key in linha) {
+              item[sanitizar(key)] = sanitizar(linha[key]);
+            }
+            return item;
+          });
+
+          const { error } = await supabase.from('producoes').insert(dadosLimpos);
+          if (error) throw error;
+          alert(`Importação concluída! ${dadosLimpos.length} produções salvas no Supabase.`);
+        } else {
+          const importados = linhasBrutas.map((linha) => ({
+            congresso: sanitizar(linha.congresso || linha.Congresso || 'Congresso Acadêmico'),
+            autor: sanitizar(linha.autor || linha.Autor || 'Autor Principal'),
+            titulo: sanitizar(linha.titulo || linha.Titulo || 'Título do Trabalho'),
+            coautores: sanitizar(linha.coautores || linha.Coautores || ''),
+            ano: sanitizar(linha.ano || linha.Ano || '2026'),
+          }));
+          setBaseImportadaEventos((prev) => [...importados, ...prev]);
+          alert(`Sucesso! ${importados.length} registros somados à base cumulativa.`);
+        }
+      } catch (err: any) {
+        console.error('Erro no processamento:', err);
+        alert(`Erro na importação: ${err.message}`);
+      }
     };
 
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handleCargaMassaProducoes = async (e: React.FormEvent) => {
@@ -916,7 +960,6 @@ export default function Dashboard() {
     return atendeEvento && atendeBusca;
   });
 
-  // FILTRAGEM DINÂMICA DAS DEMANDAS (STATUS, RESPONSÁVEL E BUSCA)
   const listaResponsaveisDemandas = Array.from(
     new Set(demandas.map((d) => d.responsavel_nome).filter(Boolean))
   );
@@ -1014,7 +1057,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col md:flex-row">
       
-      {/* 1. BARRA LATERAL INSTITUCIONAL FILTRADA POR PERMISSÃO */}
+      {/* 1. BARRA LATERAL INSTITUCIONAL */}
       <aside className="w-full md:w-64 bg-slate-50 text-slate-900 flex flex-col justify-between border-r border-slate-300 flex-shrink-0 shadow-sm">
         <div>
           <div className="p-4 border-b border-slate-300 bg-slate-100">
@@ -1502,7 +1545,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* ABA 5: GESTÃO DE DEMANDAS (COM FILTROS POR STATUS E RESPONSÁVEL) */}
+              {/* ABA 5: GESTÃO DE DEMANDAS */}
               {moduloAtivo === 'demandas' && (
                 <div className="space-y-4">
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
@@ -1515,7 +1558,6 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* CAIXA DE FILTROS DA ABA DEMANDAS */}
                   <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold">
                     <div>
                       <label className="block text-slate-900 mb-1 font-black">Filtrar por Status:</label>
@@ -1593,7 +1635,7 @@ export default function Dashboard() {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={6} className="p-4 text-center text-slate-900 font-bold italic">Nenhuma demanda encontrada com os filtros selecionados.</td>
+                            <td colSpan={6} className="p-4 text-center text-slate-900 font-bold italic">Nenhuma demanda encontrada.</td>
                           </tr>
                         )}
                       </tbody>
@@ -2356,7 +2398,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-center border-b pb-2">
                       <div>
                         <h1 className="text-lg font-black text-slate-900">Gerador de Relatórios & Base Acumulativa</h1>
-                        <p className="text-xs text-slate-900 font-bold mt-0.5">Suba arquivos em Word, Excel (.xls), CSV ou cole o texto.</p>
+                        <p className="text-xs text-slate-900 font-bold mt-0.5">Suba arquivos em Word, Excel (.xls, .xlsx), CSV ou cole o texto.</p>
                       </div>
                       <span className="bg-emerald-100 text-emerald-900 font-black text-xs px-3 py-1 rounded border border-emerald-300">
                         ✓ Base Acumulada: {baseImportadaEventos.length} registros
@@ -2366,7 +2408,7 @@ export default function Dashboard() {
                     {temPermissao('relatorios', 'editar') && (
                       <>
                         <div className="bg-slate-50 p-3 rounded border border-slate-300 space-y-2">
-                          <label className="block font-black text-xs text-slate-900">📤 Selecionar Arquivo (.csv, .xls, .doc, .txt):</label>
+                          <label className="block font-black text-xs text-slate-900">📤 Selecionar Arquivo (.csv, .xls, .xlsx, .doc, .txt):</label>
                           <input
                             type="file"
                             accept=".csv, .xls, .xlsx, .doc, .docx, .txt"
@@ -2453,7 +2495,9 @@ export default function Dashboard() {
       {modalAtivo === 'membro' && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 space-y-4 border border-slate-300 max-h-[90vh] overflow-y-auto text-xs">
-            <h3 className="font-black text-slate-900 text-base border-b pb-2">{formMembro.id ? 'Editar Integrante' : 'Cadastrar Integrante do GETECC'}</h3>
+            <h3 className="font-black text-slate-900 text-base border-b pb-2">
+              {formMembro.id ? 'Editar Integrante' : 'Cadastrar Integrante do GETECC'}
+            </h3>
             <form onSubmit={async (e) => {
               e.preventDefault();
               const novo: Membro = {
@@ -3096,7 +3140,7 @@ export default function Dashboard() {
       {modalAtivo === 'cargaMassaProducao' && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 space-y-4 border border-slate-300 text-xs">
-            <h3 className="font-black text-slate-900 text-base border-b pb-2">📥 Importar Base de Produções em Massa (.xls, .csv, Word, .txt)</h3>
+            <h3 className="font-black text-slate-900 text-base border-b pb-2">📥 Importar Base de Produções em Massa (.xls, .xlsx, .csv, Word, .txt)</h3>
             <div className="bg-slate-50 p-3 rounded border space-y-2">
               <label className="block font-black text-slate-900">Carregar Arquivo Diretamente:</label>
               <input type="file" accept=".csv, .xls, .xlsx, .doc, .docx, .txt" onChange={(e) => handleProcessarArquivoEmMassa(e, 'producoes')} className="w-full font-bold text-slate-900" />
