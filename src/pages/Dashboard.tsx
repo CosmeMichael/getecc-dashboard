@@ -1804,7 +1804,6 @@ export default function Dashboard() {
                         </button>
                       )}
                     </div>
-
                     <div className="space-y-4">
                       {Object.keys(congressosAgrupados).length > 0 ? (
                         Object.entries(congressosAgrupados).map(([eventoNome, listaProds], idx) => (
