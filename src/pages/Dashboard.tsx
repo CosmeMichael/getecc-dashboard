@@ -979,6 +979,7 @@ export default function Dashboard() {
         if (categoria === 'projetos') setProjetos(projetos.filter((p) => p.id !== id));
         if (categoria === 'demandas') setDemandas(demandas.filter((d) => d.id !== id));
         if (categoria === 'producoes') setProducoes(producoes.filter((p) => p.id !== id));
+        if (categoria === 'reunioes') setReunioes(reunioes.filter((r) => r.id !== id));
         if (categoria === 'patrimonio') setPatrimonio(patrimonio.filter((p) => p.id !== id));
         if (categoria === 'marketing') setMarketing(marketing.filter((m) => m.id !== id));
         if (categoria === 'usuarios') setUsuarios(usuarios.filter((u) => u.id !== id));
@@ -1800,15 +1801,29 @@ export default function Dashboard() {
                   </div>
 
                   <div className="bg-white rounded-lg border border-slate-300 shadow-sm p-4 space-y-3">
-                    {reunioes.map((r) => (
-                      <div key={r.id} className="p-3 border rounded bg-slate-50 space-y-2 text-xs font-bold text-slate-900">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-black text-slate-900 text-sm">{r.titulo}</h4>
-                          <span>{r.data} ({r.horario})</span>
+                    {reunioes.length > 0 ? (
+                      reunioes.map((r) => (
+                        <div key={r.id} className="p-3 border rounded bg-slate-50 space-y-2 text-xs font-bold text-slate-900">
+                          <div className="flex justify-between items-center">
+                            <h4 className="font-black text-slate-900 text-sm">{r.titulo}</h4>
+                            <div className="flex items-center space-x-2">
+                              <span>{r.data} ({r.horario})</span>
+                              {temPermissao('reunioes', 'editar') && (
+                                <button
+                                  onClick={() => handleExcluir('reunioes', r.id)}
+                                  className="bg-red-100 text-red-700 font-black text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-200 transition-colors"
+                                >
+                                  Excluir
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p>Pauta: {r.pauta}</p>
                         </div>
-                        <p>Pauta: {r.pauta}</p>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-500 italic p-3 text-center">Nenhum encontro ou reunião cadastrado.</p>
+                    )}
                   </div>
                 </div>
               )}
