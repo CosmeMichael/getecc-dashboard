@@ -406,17 +406,11 @@ export default function Dashboard() {
 
     carregarTudoDoSupabase();
 
-    // CANAL DE REALTIME PARA ATUALIZAÇÕES AUTOMÁTICAS
     const canal = supabase
       .channel('sincronizacao-global')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public' },
-        (payload) => {
-          console.log('🔔 Alteração registada no Supabase:', payload);
-          carregarTudoDoSupabase();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        carregarTudoDoSupabase();
+      })
       .subscribe();
 
     return () => {
@@ -460,7 +454,6 @@ export default function Dashboard() {
 
   const salvarUsuarioSupabase = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const email = formUsuario.email?.trim();
     const nomeCompleto = formUsuario.nome_completo?.trim();
     const perfilAcesso = formUsuario.perfil_acesso || 'Membro';
@@ -475,71 +468,39 @@ export default function Dashboard() {
       if (formUsuario.id) {
         const { error } = await supabase
           .from('usuarios')
-          .update({
-            nome_completo: nomeCompleto,
-            email,
-            perfil_acesso: perfilAcesso,
-            permissoes,
-          })
+          .update({ nome_completo: nomeCompleto, email, perfil_acesso: perfilAcesso, permissoes })
           .eq('id', formUsuario.id);
 
         if (error) throw error;
-
-        setUsuarios(usuarios.map(u => u.id === formUsuario.id ? {
-          ...u,
-          nome_completo: nomeCompleto,
-          email,
-          perfil_acesso: perfilAcesso as any,
-          permissoes,
-        } : u));
-
-        alert('Usuário e permissões atualizados com sucesso no Supabase!');
+        setUsuarios(usuarios.map(u => u.id === formUsuario.id ? { ...u, nome_completo: nomeCompleto, email, perfil_acesso: perfilAcesso as any, permissoes } : u));
+        alert('Usuário e permissões atualizados!');
       } else {
         const senhaProvisoria = 'Getecc@2026';
-
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password: senhaProvisoria,
-          options: {
-            data: {
-              nome_completo: nomeCompleto,
-              perfil_acesso: perfilAcesso,
-            }
-          }
+          options: { data: { nome_completo: nomeCompleto, perfil_acesso: perfilAcesso } }
         });
 
         if (authError) throw authError;
-
         const novoId = authData.user?.id || String(Date.now());
 
-        const { error: dbError } = await supabase
-          .from('usuarios')
-          .upsert({
-            id: novoId,
-            nome_completo: nomeCompleto,
-            email,
-            perfil_acesso: perfilAcesso,
-            situacao: 'Ativo',
-            permissoes,
-          });
-
-        if (dbError) throw dbError;
-
-        const novoUsuario: UsuarioSistema = {
+        const { error: dbError } = await supabase.from('usuarios').upsert({
           id: novoId,
           nome_completo: nomeCompleto,
           email,
-          perfil_acesso: perfilAcesso as any,
+          perfil_acesso: perfilAcesso,
           situacao: 'Ativo',
           permissoes,
-        };
+        });
 
-        setUsuarios([...usuarios, novoUsuario]);
+        if (dbError) throw dbError;
+        setUsuarios([...usuarios, { id: novoId, nome_completo: nomeCompleto, email, perfil_acesso: perfilAcesso as any, situacao: 'Ativo', permissoes }]);
         alert(`Usuário cadastrado com sucesso!\n\nE-mail: ${email}\nSenha provisória: ${senhaProvisoria}`);
       }
 
       setModalAtivo(null);
-      registrarAuditoria('Cadastro/Edição Usuário', 'Usuários', `Usuário ${email} salvo no Supabase`);
+      registrarAuditoria('Cadastro/Edição Usuário', 'Usuários', `Usuário ${email} salvo`);
     } catch (err: any) {
       alert(`Erro ao salvar no Supabase: ${err.message || err}`);
     }
@@ -550,16 +511,13 @@ export default function Dashboard() {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      if (error) {
-        alert(`Aviso: ${error.message}. E-mail registrado para solicitação de redefinição.`);
-      } else {
-        alert(`E-mail de redefinição enviado com sucesso para ${email}!`);
-      }
-      registrarAuditoria('Reset de Senha por E-mail', 'Usuários', `Solicitou e-mail de redefinição para ${email}`);
+      if (error) alert(`Aviso: ${error.message}`);
+      else alert(`E-mail de redefinição enviado para ${email}!`);
+      registrarAuditoria('Reset de Senha por E-mail', 'Usuários', `Solicitou redefinição para ${email}`);
       setModalAtivo(null);
       setUsuarioResetSenha(null);
     } catch (err: any) {
-      alert(`Erro no processo de redefinição: ${err.message || err}`);
+      alert(`Erro: ${err.message || err}`);
     }
   };
 
@@ -570,53 +528,31 @@ export default function Dashboard() {
       return;
     }
     try {
-      const { error } = await supabase.auth.updateUser({ password: novaSenhaInput });
-      if (error) {
-        alert(`Nova senha gravada no sistema para o usuário ${usuarioResetSenha.nome_completo}.`);
-      } else {
-        alert(`Senha do usuário ${usuarioResetSenha.nome_completo} alterada com sucesso!`);
-      }
-      registrarAuditoria('Redefinição Direta de Senha', 'Usuários', `Senha redefinida para ${usuarioResetSenha.email}`);
+      await supabase.auth.updateUser({ password: novaSenhaInput });
+      alert(`Senha do usuário ${usuarioResetSenha.nome_completo} alterada!`);
+      registrarAuditoria('Redefinição Direta de Senha', 'Usuários', `Senha alterada para ${usuarioResetSenha.email}`);
       setNovaSenhaInput('');
       setUsuarioResetSenha(null);
       setModalAtivo(null);
     } catch (err: any) {
       alert(`Senha atualizada no sistema para ${usuarioResetSenha.nome_completo}.`);
-      registrarAuditoria('Redefinição Direta de Senha', 'Usuários', `Senha alterada para ${usuarioResetSenha.email}`);
       setNovaSenhaInput('');
       setUsuarioResetSenha(null);
       setModalAtivo(null);
     }
   };
 
-  // CÁLCULO DO SALDO DE CAIXA
+  // CÁLCULO DE CAIXA
   const totalReceitasColaboradoresAba3 = colaboradoresFinanceiros.reduce(
     (acc, col) => acc + extrairValorNumerico(col.valor_pago),
     0
   );
+  const totalMensalidadesPagas = mensalidades.filter((m) => m.status === 'Pago').reduce((acc, m) => acc + Number(m.valor || 0), 0);
+  const totalEventosEspeciaisPagos = eventosEspeciais.filter((e) => e.status === 'Pago').reduce((acc, e) => acc + Number(e.valor || 0), 0);
+  const totalEntradasManuais = movimentacoes.filter((m) => m.tipo === 'Entrada').reduce((acc, m) => acc + Number(m.valor || 0), 0);
+  const totalSaidasManuais = movimentacoes.filter((m) => m.tipo === 'Saída').reduce((acc, m) => acc + Number(m.valor || 0), 0);
 
-  const totalMensalidadesPagas = mensalidades
-    .filter((m) => m.status === 'Pago')
-    .reduce((acc, m) => acc + Number(m.valor || 0), 0);
-
-  const totalEventosEspeciaisPagos = eventosEspeciais
-    .filter((e) => e.status === 'Pago')
-    .reduce((acc, e) => acc + Number(e.valor || 0), 0);
-
-  const totalEntradasManuais = movimentacoes
-    .filter((m) => m.tipo === 'Entrada')
-    .reduce((acc, m) => acc + Number(m.valor || 0), 0);
-
-  const totalSaidasManuais = movimentacoes
-    .filter((m) => m.tipo === 'Saída')
-    .reduce((acc, m) => acc + Number(m.valor || 0), 0);
-
-  const totalEntradasGeral =
-    totalReceitasColaboradoresAba3 +
-    totalMensalidadesPagas +
-    totalEventosEspeciaisPagos +
-    totalEntradasManuais;
-
+  const totalEntradasGeral = totalReceitasColaboradoresAba3 + totalMensalidadesPagas + totalEventosEspeciaisPagos + totalEntradasManuais;
   const totalSaidasGeral = totalSaidasManuais;
   const saldoCaixaAtual = totalEntradasGeral - totalSaidasGeral;
 
@@ -684,8 +620,7 @@ export default function Dashboard() {
     const atendeCategoria = filtroFinCategoria === 'Todas' || item.categoria === filtroFinCategoria;
     const atendeBusca = termoBusca
       ? item.descricao.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        (item.membro_nome && item.membro_nome.toLowerCase().includes(termoBusca.toLowerCase())) ||
-        (item.observacoes && item.observacoes.toLowerCase().includes(termoBusca.toLowerCase()))
+        (item.membro_nome && item.membro_nome.toLowerCase().includes(termoBusca.toLowerCase()))
       : true;
 
     let atendeData = true;
@@ -719,9 +654,9 @@ export default function Dashboard() {
         setMensalidades([...mensalidades, nova]);
       }
       setModalAtivo(null);
-      registrarAuditoria('Lançamento Mensalidade', 'Financeiro', `Mensalidade ${mes}/${ano} atualizada para o membro ID #${membro_id}`);
+      registrarAuditoria('Lançamento Mensalidade', 'Financeiro', `Mensalidade ${mes}/${ano} atualizada`);
     } catch (err: any) {
-      alert(`Erro ao salvar mensalidade no Supabase: ${err.message || err}`);
+      alert(`Erro ao salvar mensalidade: ${err.message || err}`);
     }
   };
 
@@ -748,13 +683,12 @@ export default function Dashboard() {
         setEventosEspeciais([...eventosEspeciais, nova]);
       }
       setModalAtivo(null);
-      registrarAuditoria('Lançamento Evento', 'Financeiro', `Taxa ${evento} atualizada para o membro ID #${membro_id}`);
+      registrarAuditoria('Lançamento Evento', 'Financeiro', `Taxa ${evento} atualizada`);
     } catch (err: any) {
-      alert(`Erro ao salvar evento no Supabase: ${err.message || err}`);
+      alert(`Erro ao salvar evento: ${err.message || err}`);
     }
   };
 
-  // PROCESSAMENTO DE ARQUIVOS EXCEL/CSV EM BINÁRIO COM MAPEAMENTO INTELIGENTE DE COLUNAS
   const handleProcessarArquivoEmMassa = (e: React.ChangeEvent<HTMLInputElement>, destino: 'producoes' | 'relatorios') => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
@@ -796,7 +730,7 @@ export default function Dashboard() {
             const cat = catBruta.toLowerCase().includes('congresso') || catBruta.toLowerCase().includes('resumo') ? 'Congresso' : 'Periódico';
 
             return {
-              id: crypto.randomUUID(), // <--- CHAVE PRIMÁRIA ÚNICA ADICIONADA AQUI
+              id: crypto.randomUUID(),
               categoria_producao: cat,
               status: String(buscarValor(['status', 'situacao']) || 'Publicado'),
               titulo: String(buscarValor(['titulo do trabalho', 'titulo', 'nome do trabalho', 'artigo']) || 'Sem Título'),
@@ -824,7 +758,6 @@ export default function Dashboard() {
           alert(`Sucesso! ${importados.length} registros somados à base cumulativa.`);
         }
       } catch (err: any) {
-        console.error('Erro no processamento:', err);
         alert(`Erro na importação: ${err.message}`);
       }
     };
@@ -865,8 +798,8 @@ export default function Dashboard() {
       setProducoes([...novasProds, ...producoes]);
       setTextoCargaMassaProducao('');
       setModalAtivo(null);
-      registrarAuditoria('Importação em Massa', 'Produções', `Importou ${novasProds.length} produções científicas.`);
-      alert(`Sucesso! ${novasProds.length} produções foram adicionadas à base.`);
+      registrarAuditoria('Importação em Massa', 'Produções', `Importou ${novasProds.length} produções.`);
+      alert(`Sucesso! ${novasProds.length} produções adicionadas.`);
     } catch (err: any) {
       alert(`Erro ao salvar no Supabase: ${err.message || err}`);
     }
@@ -895,7 +828,7 @@ export default function Dashboard() {
     setBaseImportadaEventos([...importados, ...baseImportadaEventos]);
     setTextoCSVRelatorio('');
     registrarAuditoria('Importação Cumulativa', 'Relatórios', `Acrescentou ${importados.length} registros.`);
-    alert(`Sucesso! ${importados.length} registros foram somados cumulativamente.`);
+    alert(`Sucesso! ${importados.length} registros somados.`);
   };
 
   const handleUploadFotoMembro = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1001,8 +934,7 @@ export default function Dashboard() {
     const atendeBusca = termoBusca
       ? d.titulo.toLowerCase().includes(termoBusca.toLowerCase()) ||
         d.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        d.descricao.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        d.responsavel_nome.toLowerCase().includes(termoBusca.toLowerCase())
+        d.descricao.toLowerCase().includes(termoBusca.toLowerCase())
       : true;
 
     return atendeStatus && atendeResponsavel && atendeBusca;
@@ -1060,8 +992,423 @@ export default function Dashboard() {
 
         registrarAuditoria('Exclusão', categoria, `Registro ID #${id} excluído`);
       } catch (err: any) {
-        alert(`Erro ao excluir do Supabase: ${err.message || err}`);
+        alert(`Erro ao excluir: ${err.message || err}`);
       }
+    }
+  };
+
+  // FUNÇÕES DE SALVAMENTO DE TODOS OS MÓDULOS
+  const salvarMembro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMembro.id || crypto.randomUUID();
+    const payload: Membro = {
+      id,
+      matricula: formMembro.matricula || '',
+      nome_completo: formMembro.nome_completo || '',
+      foto_dataurl: formMembro.foto_dataurl || '',
+      cpf: formMembro.cpf || '',
+      email_institucional: formMembro.email_institucional || '',
+      email_alternativo: formMembro.email_alternativo || '',
+      instagram: formMembro.instagram || '',
+      orcid_link: formMembro.orcid_link || '',
+      lattes_link: formMembro.lattes_link || '',
+      endereco: formMembro.endereco || '',
+      financiamento: formMembro.financiamento || '',
+      telefone: formMembro.telefone || '',
+      curso_formacao: formMembro.curso_formacao || '',
+      instituicao: formMembro.instituicao || '',
+      categoria: formMembro.categoria || 'Pesquisadores',
+      funcao_cargo: formMembro.funcao_cargo || '',
+      data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
+      data_desligamento: formMembro.data_desligamento || '',
+      situacao: formMembro.situacao || 'Ativo',
+      historico_afastamentos: formMembro.historico_afastamentos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('membros').upsert(payload);
+      if (error) throw error;
+
+      if (formMembro.id) {
+        setMembros(membros.map((m) => (m.id === id ? payload : m)));
+      } else {
+        setMembros([...membros, payload]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Membro', 'Membros', `Membro ${payload.nome_completo} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar membro: ${err.message || err}`);
+    }
+  };
+
+  const salvarAfastamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formMembro.id) return;
+
+    const novoAfastamento: RegistroAfastamento = {
+      id: crypto.randomUUID(),
+      tipo: formAfastamento.tipo || 'Licença',
+      data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
+      data_fim: formAfastamento.data_fim || '',
+      motivo: formAfastamento.motivo || '',
+    };
+
+    const historicoAtualizado = [...(formMembro.historico_afastamentos || []), novoAfastamento];
+    const membroAtualizado: Membro = {
+      ...(formMembro as Membro),
+      situacao: 'Em Afastamento/Licença',
+      historico_afastamentos: historicoAtualizado,
+    };
+
+    try {
+      const { error } = await supabase.from('membros').upsert(membroAtualizado);
+      if (error) throw error;
+
+      setMembros(membros.map((m) => (m.id === formMembro.id ? membroAtualizado : m)));
+      setModalAtivo(null);
+      setFormAfastamento({});
+      registrarAuditoria('Registrar Licença', 'Membros', `Ausência registrada para ${formMembro.nome_completo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar licença: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaborador = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaborador.id || crypto.randomUUID();
+    const item: ColaboradorExterno = {
+      id,
+      nome: formColaborador.nome || '',
+      cpf: formColaborador.cpf || '',
+      titulacao: formColaborador.titulacao || 'Doutor',
+      email: formColaborador.email || '',
+      orcid: formColaborador.orcid || '',
+      numero_conselho: formColaborador.numero_conselho || '',
+      afiliacao: formColaborador.afiliacao || '',
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores').upsert(item);
+      if (error) throw error;
+
+      if (formColaborador.id) {
+        setColaboradores(colaboradores.map((c) => (c.id === id ? item : c)));
+      } else {
+        setColaboradores([...colaboradores, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador', 'Colaboradores', `Colaborador ${item.nome} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaboradorFinanceiro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaboradorFinanceiro.id || crypto.randomUUID();
+    const item: ColaboradorFinanceiro = {
+      id,
+      nome: formColaboradorFinanceiro.nome || '',
+      cpf: formColaboradorFinanceiro.cpf || '',
+      titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
+      email: formColaboradorFinanceiro.email || '',
+      orcid: formColaboradorFinanceiro.orcid || '',
+      numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
+      afiliacao: formColaboradorFinanceiro.afiliacao || '',
+      evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
+      valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
+      status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
+      data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores_financeiros').upsert(item);
+      if (error) throw error;
+
+      if (formColaboradorFinanceiro.id) {
+        setColaboradoresFinanceiros(colaboradoresFinanceiros.map((cf) => (cf.id === id ? item : cf)));
+      } else {
+        setColaboradoresFinanceiros([...colaboradoresFinanceiros, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador Financeiro', 'Colaboradores', `Aba 3: ${item.nome}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador financeiro: ${err.message || err}`);
+    }
+  };
+
+  const salvarMovimentacao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMovimentacao.id || crypto.randomUUID();
+    const item: MovimentacaoFinanceira = {
+      id,
+      descricao: formMovimentacao.descricao || '',
+      valor: Number(formMovimentacao.valor || 0),
+      tipo: formMovimentacao.tipo || 'Entrada',
+      categoria: formMovimentacao.categoria || 'Outros',
+      data: formMovimentacao.data || new Date().toISOString().split('T')[0],
+      membro_id: formMovimentacao.membro_id,
+      membro_nome: formMovimentacao.membro_nome,
+      observacoes: formMovimentacao.observacoes,
+    };
+
+    try {
+      const { error } = await supabase.from('movimentacoes').upsert(item);
+      if (error) throw error;
+
+      if (formMovimentacao.id) {
+        setMovimentacoes(movimentacoes.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMovimentacoes([...movimentacoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Lançamento Caixa', 'Financeiro', `Caixa: ${item.tipo} - R$ ${item.valor}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar caixa: ${err.message || err}`);
+    }
+  };
+
+  const salvarProjeto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProjeto.id || crypto.randomUUID();
+    const docentesArr = formDocentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+    const discentesArr = formDiscentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+
+    const item: ProjetoPesquisa = {
+      id,
+      titulo: formProjeto.titulo || '',
+      coordenador: formProjeto.coordenador || '',
+      linha_pesquisa: formProjeto.linha_pesquisa || '',
+      docentes: docentesArr,
+      discentes: discentesArr,
+      parecer_cep: formProjeto.parecer_cep || '',
+      caee_cep: formProjeto.caee_cep || '',
+      financiamento: formProjeto.financiamento || '',
+      observacoes: formProjeto.observacoes || '',
+      status: formProjeto.status || 'Em aberto',
+      artigos_derivados: formProjeto.artigos_derivados || [],
+      anexos: formProjeto.anexos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('projetos').upsert(item);
+      if (error) throw error;
+
+      if (formProjeto.id) {
+        setProjetos(projetos.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProjetos([...projetos, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Projeto', 'Projetos', `Projeto: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar projeto: ${err.message || err}`);
+    }
+  };
+
+  const adicionarArtigoDerivadoNoProjeto = () => {
+    if (!formArtigoDerivado.titulo || !formArtigoDerivado.revista) {
+      alert('Preencha o título e a revista do artigo derivado.');
+      return;
+    }
+    const novoArtigo: ArtigoDerivado = {
+      id: crypto.randomUUID(),
+      titulo: formArtigoDerivado.titulo || '',
+      revista: formArtigoDerivado.revista || '',
+      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
+      status: formArtigoDerivado.status || 'em produção',
+      anexos: formArtigoDerivado.anexos || [],
+    };
+
+    setFormProjeto({
+      ...formProjeto,
+      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArtigo],
+    });
+    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
+  };
+
+  const salvarDemanda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formDemanda.id || crypto.randomUUID();
+    const item: Demanda = {
+      id,
+      codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
+      titulo: formDemanda.titulo || '',
+      descricao: formDemanda.descricao || '',
+      responsavel_nome: formDemanda.responsavel_nome || '',
+      prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
+      prioridade: formDemanda.prioridade || 'Média',
+      status: formDemanda.status || 'Em andamento',
+      anexos: formDemanda.anexos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('demandas').upsert(item);
+      if (error) throw error;
+
+      if (formDemanda.id) {
+        setDemandas(demandas.map((d) => (d.id === id ? item : d)));
+      } else {
+        setDemandas([...demandas, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Demanda', 'Demandas', `Demanda ${item.codigo}: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar demanda: ${err.message || err}`);
+    }
+  };
+
+  const salvarProducao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProducao.id || crypto.randomUUID();
+    const item: ProducaoCientifica = {
+      id,
+      categoria_producao: formProducao.categoria_producao || 'Periódico',
+      tipo_producao: formProducao.tipo_producao || 'Artigo Científico',
+      titulo: formProducao.titulo || '',
+      evento_ou_revista: formProducao.evento_ou_revista || '',
+      autor_principal: formProducao.autor_principal || '',
+      coautores: formProducao.coautores || '',
+      ano_publicacao: formProducao.ano_publicacao || '2026',
+      qualis_doi: formProducao.qualis_doi || 'N/A',
+      status: formProducao.status || 'Publicado',
+    };
+
+    try {
+      const { error } = await supabase.from('producoes').upsert(item);
+      if (error) throw error;
+
+      if (formProducao.id) {
+        setProducoes(producoes.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProducoes([...producoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Produção', 'Produções', `Produção: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar produção: ${err.message || err}`);
+    }
+  };
+
+  const salvarMetaAnual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item: MetaAnualProducao = {
+      ano: formMetaAnual.ano || '2026',
+      meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
+      meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
+      meta_resumos: Number(formMetaAnual.meta_resumos || 0),
+    };
+
+    try {
+      const { error } = await supabase.from('metas_anuais').upsert(item);
+      if (error) throw error;
+
+      const idx = metasAnuais.findIndex((m) => m.ano === item.ano);
+      if (idx >= 0) {
+        const copy = [...metasAnuais];
+        copy[idx] = item;
+        setMetasAnuais(copy);
+      } else {
+        setMetasAnuais([...metasAnuais, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Meta Anual', 'Produções', `Meta ano ${item.ano} salva`);
+    } catch (err: any) {
+      alert(`Erro ao salvar meta: ${err.message || err}`);
+    }
+  };
+
+  const salvarReuniao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formReuniao.id || crypto.randomUUID();
+    const listaPresencas = membrosAtivos.map((m) => ({
+      membro_id: m.id,
+      membro_nome: m.nome_completo,
+      status: presencasChamada[m.id] || 'presente',
+    }));
+
+    const item: ReuniaoCientifica = {
+      id,
+      titulo: formReuniao.titulo || 'Encontro Científico',
+      data: formReuniao.data || new Date().toISOString().split('T')[0],
+      horario: formReuniao.horario || '19:00',
+      pauta: formReuniao.pauta || '',
+      presencas: listaPresencas,
+    };
+
+    try {
+      const { error } = await supabase.from('reunioes').upsert(item);
+      if (error) throw error;
+
+      if (formReuniao.id) {
+        setReunioes(reunioes.map((r) => (r.id === id ? item : r)));
+      } else {
+        setReunioes([...reunioes, item]);
+      }
+      setModalAtivo(null);
+      setPresencasChamada({});
+      registrarAuditoria('Salvar Reunião', 'Reuniões', `Reunião ${item.titulo} salva`);
+    } catch (err: any) {
+      alert(`Erro ao salvar reunião: ${err.message || err}`);
+    }
+  };
+
+  const salvarPatrimonio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formPatrimonio.id || crypto.randomUUID();
+    const item: PatrimonioProduto = {
+      id,
+      nome: formPatrimonio.nome || '',
+      descricao: formPatrimonio.descricao || '',
+      quantidade: Number(formPatrimonio.quantidade || 1),
+      foto_dataurl: formPatrimonio.foto_dataurl || '',
+      estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
+      responsavel: formPatrimonio.responsavel || '',
+    };
+
+    try {
+      const { error } = await supabase.from('patrimonio').upsert(item);
+      if (error) throw error;
+
+      if (formPatrimonio.id) {
+        setPatrimonio(patrimonio.map((p) => (p.id === id ? item : p)));
+      } else {
+        setPatrimonio([...patrimonio, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Patrimônio', 'Patrimônio', `Item: ${item.nome}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar patrimônio: ${err.message || err}`);
+    }
+  };
+
+  const salvarMarketing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMarketing.id || crypto.randomUUID();
+    const item: MarketingItem = {
+      id,
+      titulo: formMarketing.titulo || '',
+      canal: formMarketing.canal || 'Instagram',
+      responsavel: formMarketing.responsavel || '',
+      data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
+      status: formMarketing.status || 'Ideia',
+      legenda: formMarketing.legenda || '',
+      artes: formMarketing.artes || [],
+    };
+
+    try {
+      const { error } = await supabase.from('marketing').upsert(item);
+      if (error) throw error;
+
+      if (formMarketing.id) {
+        setMarketing(marketing.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMarketing([...marketing, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Marketing', 'Marketing', `Ação: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar mídia: ${err.message || err}`);
     }
   };
 
@@ -1087,8 +1434,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col md:flex-row">
-      
-      {/* 1. BARRA LATERAL INSTITUCIONAL */}
+      {/* BARRA LATERAL INSTITUCIONAL */}
       <aside className="w-full md:w-64 bg-slate-50 text-slate-900 flex flex-col justify-between border-r border-slate-300 flex-shrink-0 shadow-sm">
         <div>
           <div className="p-4 border-b border-slate-300 bg-slate-100">
@@ -1154,9 +1500,8 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* 2. ÁREA DE CONTEÚDO PRINCIPAL */}
+      {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
-        
         <header className="bg-white border-b border-slate-300 px-6 py-3 flex items-center justify-between shadow-sm">
           <input
             type="text"
@@ -1171,13 +1516,11 @@ export default function Dashboard() {
         </header>
 
         <main className="p-6 max-w-7xl w-full mx-auto space-y-6 flex-1">
-
-          {/* CHECK GERAL DE ACESSO */}
           {moduloAtivo !== 'painel' && !temPermissao(moduloAtivo, 'visualizar') ? (
             <div className="bg-red-50 p-8 rounded-lg border border-red-200 text-center space-y-2">
               <span className="text-3xl">🛑</span>
               <h2 className="text-red-700 font-black text-base">Acesso Restrito</h2>
-              <p className="text-xs text-slate-700 font-bold">Você não possui permissão para visualizar este módulo. Solicite ao Administrador do GETECC.</p>
+              <p className="text-xs text-slate-700 font-bold">Você não possui permissão para visualizar este módulo.</p>
             </div>
           ) : (
             <>
@@ -1804,6 +2147,7 @@ export default function Dashboard() {
                         </button>
                       )}
                     </div>
+
                     <div className="space-y-4">
                       {Object.keys(congressosAgrupados).length > 0 ? (
                         Object.entries(congressosAgrupados).map(([eventoNome, listaProds], idx) => (
@@ -1981,7 +2325,6 @@ export default function Dashboard() {
               {/* ABA 11: FINANCEIRO */}
               {moduloAtivo === 'financeiro' && (
                 <div className="space-y-6">
-                  
                   <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-4">
                       <div>
@@ -2516,426 +2859,7 @@ export default function Dashboard() {
 
         </main>
       </div>
-// ==========================================
-  // FUNÇÕES DE SALVAMENTO NO SUPABASE PARA TODOS OS MÓDULOS
-  // ==========================================
 
-  const salvarMembro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMembro.id || crypto.randomUUID();
-    const payload: Membro = {
-      id,
-      matricula: formMembro.matricula || '',
-      nome_completo: formMembro.nome_completo || '',
-      foto_dataurl: formMembro.foto_dataurl || '',
-      cpf: formMembro.cpf || '',
-      email_institucional: formMembro.email_institucional || '',
-      email_alternativo: formMembro.email_alternativo || '',
-      instagram: formMembro.instagram || '',
-      orcid_link: formMembro.orcid_link || '',
-      lattes_link: formMembro.lattes_link || '',
-      endereco: formMembro.endereco || '',
-      financiamento: formMembro.financiamento || '',
-      telefone: formMembro.telefone || '',
-      curso_formacao: formMembro.curso_formacao || '',
-      instituicao: formMembro.instituicao || '',
-      categoria: formMembro.categoria || 'Pesquisadores',
-      funcao_cargo: formMembro.funcao_cargo || '',
-      data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
-      data_desligamento: formMembro.data_desligamento || '',
-      situacao: formMembro.situacao || 'Ativo',
-      historico_afastamentos: formMembro.historico_afastamentos || [],
-    };
-
-    try {
-      const { error } = await supabase.from('membros').upsert(payload);
-      if (error) throw error;
-
-      if (formMembro.id) {
-        setMembros(membros.map((m) => (m.id === id ? payload : m)));
-      } else {
-        setMembros([...membros, payload]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Membro', 'Membros', `Membro ${payload.nome_completo} salvo no Supabase`);
-    } catch (err: any) {
-      alert(`Erro ao salvar membro: ${err.message || err}`);
-    }
-  };
-
-  const salvarAfastamento = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formMembro.id) return;
-
-    const novoAfastamento: RegistroAfastamento = {
-      id: crypto.randomUUID(),
-      tipo: formAfastamento.tipo || 'Licença',
-      data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
-      data_fim: formAfastamento.data_fim || '',
-      motivo: formAfastamento.motivo || '',
-    };
-
-    const historicoAtualizado = [...(formMembro.historico_afastamentos || []), novoAfastamento];
-    const membroAtualizado: Membro = {
-      ...(formMembro as Membro),
-      situacao: 'Em Afastamento/Licença',
-      historico_afastamentos: historicoAtualizado,
-    };
-
-    try {
-      const { error } = await supabase.from('membros').upsert(membroAtualizado);
-      if (error) throw error;
-
-      setMembros(membros.map((m) => (m.id === formMembro.id ? membroAtualizado : m)));
-      setModalAtivo(null);
-      setFormAfastamento({});
-      registrarAuditoria('Registrar Licença', 'Membros', `Ausência registrada para ${formMembro.nome_completo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar licença: ${err.message || err}`);
-    }
-  };
-
-  const salvarColaborador = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formColaborador.id || crypto.randomUUID();
-    const item: ColaboradorExterno = {
-      id,
-      nome: formColaborador.nome || '',
-      cpf: formColaborador.cpf || '',
-      titulacao: formColaborador.titulacao || 'Doutor',
-      email: formColaborador.email || '',
-      orcid: formColaborador.orcid || '',
-      numero_conselho: formColaborador.numero_conselho || '',
-      afiliacao: formColaborador.afiliacao || '',
-    };
-
-    try {
-      const { error } = await supabase.from('colaboradores').upsert(item);
-      if (error) throw error;
-
-      if (formColaborador.id) {
-        setColaboradores(colaboradores.map((c) => (c.id === id ? item : c)));
-      } else {
-        setColaboradores([...colaboradores, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Colaborador', 'Colaboradores', `Colaborador Externo ${item.nome} salvo`);
-    } catch (err: any) {
-      alert(`Erro ao salvar colaborador: ${err.message || err}`);
-    }
-  };
-
-  const salvarColaboradorFinanceiro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formColaboradorFinanceiro.id || crypto.randomUUID();
-    const item: ColaboradorFinanceiro = {
-      id,
-      nome: formColaboradorFinanceiro.nome || '',
-      cpf: formColaboradorFinanceiro.cpf || '',
-      titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
-      email: formColaboradorFinanceiro.email || '',
-      orcid: formColaboradorFinanceiro.orcid || '',
-      numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
-      afiliacao: formColaboradorFinanceiro.afiliacao || '',
-      evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
-      valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
-      status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
-      data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
-    };
-
-    try {
-      const { error } = await supabase.from('colaboradores_financeiros').upsert(item);
-      if (error) throw error;
-
-      if (formColaboradorFinanceiro.id) {
-        setColaboradoresFinanceiros(colaboradoresFinanceiros.map((cf) => (cf.id === id ? item : cf)));
-      } else {
-        setColaboradoresFinanceiros([...colaboradoresFinanceiros, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Colaborador Financeiro', 'Colaboradores', `Aba 3: ${item.nome} (${item.evento_ou_artigo})`);
-    } catch (err: any) {
-      alert(`Erro ao salvar colaborador financeiro: ${err.message || err}`);
-    }
-  };
-
-  const salvarMovimentacao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMovimentacao.id || crypto.randomUUID();
-    const item: MovimentacaoFinanceira = {
-      id,
-      descricao: formMovimentacao.descricao || '',
-      valor: Number(formMovimentacao.valor || 0),
-      tipo: formMovimentacao.tipo || 'Entrada',
-      categoria: formMovimentacao.categoria || 'Outros',
-      data: formMovimentacao.data || new Date().toISOString().split('T')[0],
-      membro_id: formMovimentacao.membro_id,
-      membro_nome: formMovimentacao.membro_nome,
-      observacoes: formMovimentacao.observacoes,
-    };
-
-    try {
-      const { error } = await supabase.from('movimentacoes').upsert(item);
-      if (error) throw error;
-
-      if (formMovimentacao.id) {
-        setMovimentacoes(movimentacoes.map((m) => (m.id === id ? item : m)));
-      } else {
-        setMovimentacoes([...movimentacoes, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Lançamento Caixa', 'Financeiro', `Caixa: ${item.tipo} - R$ ${item.valor}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar caixa: ${err.message || err}`);
-    }
-  };
-
-  const salvarProjeto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formProjeto.id || crypto.randomUUID();
-    const docentesArr = formDocentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
-    const discentesArr = formDiscentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
-
-    const item: ProjetoPesquisa = {
-      id,
-      titulo: formProjeto.titulo || '',
-      coordenador: formProjeto.coordenador || '',
-      linha_pesquisa: formProjeto.linha_pesquisa || '',
-      docentes: docentesArr,
-      discentes: discentesArr,
-      parecer_cep: formProjeto.parecer_cep || '',
-      caee_cep: formProjeto.caee_cep || '',
-      financiamento: formProjeto.financiamento || '',
-      observacoes: formProjeto.observacoes || '',
-      status: formProjeto.status || 'Em aberto',
-      artigos_derivados: formProjeto.artigos_derivados || [],
-      anexos: formProjeto.anexos || [],
-    };
-
-    try {
-      const { error } = await supabase.from('projetos').upsert(item);
-      if (error) throw error;
-
-      if (formProjeto.id) {
-        setProjetos(projetos.map((p) => (p.id === id ? item : p)));
-      } else {
-        setProjetos([...projetos, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Projeto', 'Projetos', `Projeto: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar projeto: ${err.message || err}`);
-    }
-  };
-
-  const adicionarArtigoDerivadoNoProjeto = () => {
-    if (!formArtigoDerivado.titulo || !formArtigoDerivado.revista) {
-      alert('Preencha pelo menos o título e a revista do artigo derivado.');
-      return;
-    }
-    const novoArtigo: ArtigoDerivado = {
-      id: crypto.randomUUID(),
-      titulo: formArtigoDerivado.titulo || '',
-      revista: formArtigoDerivado.revista || '',
-      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
-      status: formArtigoDerivado.status || 'em produção',
-      anexos: formArtigoDerivado.anexos || [],
-    };
-
-    setFormProjeto({
-      ...formProjeto,
-      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArtigo],
-    });
-    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
-  };
-
-  const salvarDemanda = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formDemanda.id || crypto.randomUUID();
-    const item: Demanda = {
-      id,
-      codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
-      titulo: formDemanda.titulo || '',
-      descricao: formDemanda.descricao || '',
-      responsavel_nome: formDemanda.responsavel_nome || '',
-      prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
-      prioridade: formDemanda.prioridade || 'Média',
-      status: formDemanda.status || 'Em andamento',
-      anexos: formDemanda.anexos || [],
-    };
-
-    try {
-      const { error } = await supabase.from('demandas').upsert(item);
-      if (error) throw error;
-
-      if (formDemanda.id) {
-        setDemandas(demandas.map((d) => (d.id === id ? item : d)));
-      } else {
-        setDemandas([...demandas, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Demanda', 'Demandas', `Demanda ${item.codigo}: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar demanda: ${err.message || err}`);
-    }
-  };
-
-  const salvarProducao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formProducao.id || crypto.randomUUID();
-    const item: ProducaoCientifica = {
-      id,
-      categoria_producao: formProducao.categoria_producao || 'Periódico',
-      tipo_producao: formProducao.tipo_producao || 'Artigo Científico',
-      titulo: formProducao.titulo || '',
-      evento_ou_revista: formProducao.evento_ou_revista || '',
-      autor_principal: formProducao.autor_principal || '',
-      coautores: formProducao.coautores || '',
-      ano_publicacao: formProducao.ano_publicacao || '2026',
-      qualis_doi: formProducao.qualis_doi || 'N/A',
-      status: formProducao.status || 'Publicado',
-    };
-
-    try {
-      const { error } = await supabase.from('producoes').upsert(item);
-      if (error) throw error;
-
-      if (formProducao.id) {
-        setProducoes(producoes.map((p) => (p.id === id ? item : p)));
-      } else {
-        setProducoes([...producoes, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Produção', 'Produções', `Produção: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar produção: ${err.message || err}`);
-    }
-  };
-
-  const salvarMetaAnual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const item: MetaAnualProducao = {
-      ano: formMetaAnual.ano || '2026',
-      meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
-      meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
-      meta_resumos: Number(formMetaAnual.meta_resumos || 0),
-    };
-
-    try {
-      const { error } = await supabase.from('metas_anuais').upsert(item);
-      if (error) throw error;
-
-      const idx = metasAnuais.findIndex((m) => m.ano === item.ano);
-      if (idx >= 0) {
-        const copy = [...metasAnuais];
-        copy[idx] = item;
-        setMetasAnuais(copy);
-      } else {
-        setMetasAnuais([...metasAnuais, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Meta Anual', 'Produções', `Meta para o ano ${item.ano} salva`);
-    } catch (err: any) {
-      alert(`Erro ao salvar meta anual: ${err.message || err}`);
-    }
-  };
-
-  const salvarReuniao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formReuniao.id || crypto.randomUUID();
-    const listaPresencas = membrosAtivos.map((m) => ({
-      membro_id: m.id,
-      membro_nome: m.nome_completo,
-      status: presencasChamada[m.id] || 'presente',
-    }));
-
-    const item: ReuniaoCientifica = {
-      id,
-      titulo: formReuniao.titulo || 'Encontro Científico',
-      data: formReuniao.data || new Date().toISOString().split('T')[0],
-      horario: formReuniao.horario || '19:00',
-      pauta: formReuniao.pauta || '',
-      presencas: listaPresencas,
-    };
-
-    try {
-      const { error } = await supabase.from('reunioes').upsert(item);
-      if (error) throw error;
-
-      if (formReuniao.id) {
-        setReunioes(reunioes.map((r) => (r.id === id ? item : r)));
-      } else {
-        setReunioes([...reunioes, item]);
-      }
-      setModalAtivo(null);
-      setPresencasChamada({});
-      registrarAuditoria('Salvar Reunião', 'Reuniões', `Reunião ${item.titulo} registrada`);
-    } catch (err: any) {
-      alert(`Erro ao salvar reunião: ${err.message || err}`);
-    }
-  };
-
-  const salvarPatrimonio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formPatrimonio.id || crypto.randomUUID();
-    const item: PatrimonioProduto = {
-      id,
-      nome: formPatrimonio.nome || '',
-      descricao: formPatrimonio.descricao || '',
-      quantidade: Number(formPatrimonio.quantidade || 1),
-      foto_dataurl: formPatrimonio.foto_dataurl || '',
-      estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
-      responsavel: formPatrimonio.responsavel || '',
-    };
-
-    try {
-      const { error } = await supabase.from('patrimonio').upsert(item);
-      if (error) throw error;
-
-      if (formPatrimonio.id) {
-        setPatrimonio(patrimonio.map((p) => (p.id === id ? item : p)));
-      } else {
-        setPatrimonio([...patrimonio, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Patrimônio', 'Patrimônio', `Item: ${item.nome}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar patrimônio: ${err.message || err}`);
-    }
-  };
-
-  const salvarMarketing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMarketing.id || crypto.randomUUID();
-    const item: MarketingItem = {
-      id,
-      titulo: formMarketing.titulo || '',
-      canal: formMarketing.canal || 'Instagram',
-      responsavel: formMarketing.responsavel || '',
-      data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
-      status: formMarketing.status || 'Ideia',
-      legenda: formMarketing.legenda || '',
-      artes: formMarketing.artes || [],
-    };
-
-    try {
-      const { error } = await supabase.from('marketing').upsert(item);
-      if (error) throw error;
-
-      if (formMarketing.id) {
-        setMarketing(marketing.map((m) => (m.id === id ? item : m)));
-      } else {
-        setMarketing([...marketing, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Marketing', 'Marketing', `Ação: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar mídia: ${err.message || err}`);
-    }
-  };
-
-  return (
-    <>
       {/* ==========================================
           MODAIS SOBREPOSTOS DO SISTEMA (OVERLAYS)
           ========================================== */}
@@ -3620,7 +3544,6 @@ export default function Dashboard() {
                 <textarea rows={2} required value={formReuniao.pauta || ''} onChange={(e) => setFormReuniao({ ...formReuniao, pauta: e.target.value })} className="w-full border p-2 rounded" />
               </div>
 
-              {/* LISTA DE CHAMADA DE MEMBROS ATIVOS */}
               <div className="border p-3 rounded bg-slate-50 space-y-2 max-h-60 overflow-y-auto">
                 <h3 className="font-black text-slate-900 border-b pb-1">📋 Chamada de Membros Ativos ({membrosAtivos.length}):</h3>
                 {membrosAtivos.map((m) => (
@@ -3781,7 +3704,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* MATRIZ DE PERMISSÕES POR ABA */}
               <div className="border p-3 rounded bg-slate-50 space-y-2 max-h-72 overflow-y-auto">
                 <h3 className="font-black text-slate-900 border-b pb-1">🔑 Matriz de Permissões Específicas por Módulo:</h3>
                 <div className="space-y-2">
@@ -3852,7 +3774,6 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-4 pt-2">
-              {/* OPÇÃO 1: ENVIAR EMAIL DE REDEFINIÇÃO */}
               <div className="border p-3 rounded bg-blue-50 border-blue-200 space-y-2">
                 <p className="text-xs font-black text-blue-900">Opção 1: Link de Redefinição via E-mail</p>
                 <p className="text-[11px] text-blue-800 font-bold">Envia um e-mail com instrução e link seguro de alteração de senha para o usuário.</p>
@@ -3865,7 +3786,6 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {/* OPÇÃO 2: DEFINIÇÃO DIRETA DE NOVA SENHA */}
               <div className="border p-3 rounded bg-amber-50 border-amber-200 space-y-2">
                 <p className="text-xs font-black text-amber-900">Opção 2: Gravar Nova Senha Manualmente</p>
                 <label className="block text-[11px] font-bold text-amber-900">Digite a nova senha para este usuário:</label>
@@ -3898,6 +3818,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
