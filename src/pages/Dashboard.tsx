@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
 // ==========================================
-// INTERFACES E TIPOS DE DADOS COMPLETOS DO GETECC
+// INTERFACES E TIPOS DE DADOS ATUALIZADOS DO GETECC
 // ==========================================
 export interface AnexoArquivo {
   id: string;
@@ -39,7 +39,7 @@ export interface Membro {
   categoria: 'Coordenação' | 'Diretoria' | 'Pesquisadores' | 'Estudantes' | 'Egressos';
   funcao_cargo: string;
   data_ingresso: string;
-  data_desligamento?: string;
+  data_desligamento?: string | null;
   situacao: 'Ativo' | 'Desligado' | 'Em Afastamento/Licença';
   historico_afastamentos: RegistroAfastamento[];
 }
@@ -124,6 +124,8 @@ export interface ProjetoPesquisa {
   status: 'Em aberto' | 'Submetido' | 'Cadastrado' | 'Em execução' | 'Concluído';
   artigos_derivados: ArtigoDerivado[];
   anexos: AnexoArquivo[];
+  parecer_cep_arquivo_dataurl?: string;
+  parecer_cep_arquivo_nome?: string;
 }
 
 export interface Demanda {
@@ -132,6 +134,9 @@ export interface Demanda {
   titulo: string;
   descricao: string;
   responsavel_nome: string;
+  cadastrado_por?: string;
+  concluido_por?: string;
+  eh_coracao?: boolean;
   prazo_final: string;
   prioridade: 'Baixa' | 'Média' | 'Alta' | 'Urgente';
   status: 'Não iniciada' | 'Em andamento' | 'Com pendências' | 'Concluída';
@@ -148,7 +153,7 @@ export interface ProducaoCientifica {
   coautores: string;
   ano_publicacao: string;
   qualis_doi: string;
-  status: 'Pendente Submissão' | 'Submetido' | 'Publicado';
+  status: 'Pendente Submissão' | 'Submetido' | 'Publicado' | 'em editoração' | 'aguardando submissão' | 'aguardando anais' | 'anais publicados';
 }
 
 export interface MetaAnualProducao {
@@ -228,6 +233,14 @@ const LogoGetecc = () => (
   </div>
 );
 
+// ÍCONE DO CORAÇÃO ANATÔMICO (NÚCLEO CORAÇÃO)
+const IconeCoracaoAnatomico = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-red-600 inline-block">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z M12 5.27c-.88-1.04-2.18-1.77-3.65-1.77-2.61 0-4.85 2.14-4.85 4.85 0 2.92 2.76 5.51 7.22 9.56l1.28 1.16 1.28-1.16c4.46-4.05 7.22-6.64 7.22-9.56 0-2.71-2.24-4.85-4.85-4.85-1.47 0-2.77.73-3.65 1.77z"/>
+    <path d="M12 6.5v4M10 8.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
 // CONVERSOR MONETÁRIO SEGURO
 const extrairValorNumerico = (texto: string | number | undefined): number => {
   if (typeof texto === 'number') return texto;
@@ -244,7 +257,7 @@ const NOMES_MESES = [
 
 export default function Dashboard() {
   const [moduloAtivo, setModuloAtivo] = useState<
-    'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'configuracoes'
+    'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'coracao' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'configuracoes'
   >('painel');
 
   // USUÁRIO LOGADO E VERIFICAÇÃO DE PERMISSÕES
@@ -276,9 +289,10 @@ export default function Dashboard() {
   const [termoBusca, setTermoBusca] = useState('');
   const [filtroEventoFinanceiro, setFiltroEventoFinanceiro] = useState<string>('Todos');
 
-  // FILTROS DO MÓDULO DE DEMANDAS
+  // FILTROS DO MÓDULO DE DEMANDAS & PRODUÇÕES
   const [filtroDemandaStatus, setFiltroDemandaStatus] = useState<string>('Todos');
   const [filtroDemandaResponsavel, setFiltroDemandaResponsavel] = useState<string>('Todos');
+  const [filtroProducaoAutor, setFiltroProducaoAutor] = useState<string>('Todos');
 
   // FILTROS DO MÓDULO FINANCEIRO
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<'movimentacoes' | 'mensalidades' | 'eventos_especiais'>('movimentacoes');
@@ -333,7 +347,7 @@ export default function Dashboard() {
   const [formDocentesTexto, setFormDocentesTexto] = useState('');
   const [formDiscentesTexto, setFormDiscentesTexto] = useState('');
   const [formArtigoDerivado, setFormArtigoDerivado] = useState<Partial<ArtigoDerivado>>({ status: 'em produção', anexos: [] });
-  const [formDemanda, setFormDemanda] = useState<Partial<Demanda>>({ prioridade: 'Média', status: 'Em andamento', anexos: [] });
+  const [formDemanda, setFormDemanda] = useState<Partial<Demanda>>({ prioridade: 'Média', status: 'Em andamento', anexos: [], eh_coracao: false });
   const [formProducao, setFormProducao] = useState<Partial<ProducaoCientifica>>({ categoria_producao: 'Periódico', status: 'Publicado', ano_publicacao: '2026' });
   const [formMetaAnual, setFormMetaAnual] = useState<Partial<MetaAnualProducao>>({ ano: '2026', meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 });
   const [textoCargaMassaProducao, setTextoCargaMassaProducao] = useState('');
@@ -432,6 +446,9 @@ export default function Dashboard() {
   const temPermissao = (abaKey: string, acao: 'visualizar' | 'editar'): boolean => {
     if (!usuarioLogado) return true;
     if (usuarioLogado.perfil_acesso === 'Administrador') return true;
+    if (abaKey === 'coracao') {
+      return ['Administrador', 'Coordenador', 'Diretoria'].includes(usuarioLogado.perfil_acesso);
+    }
     return usuarioLogado.permissoes?.[abaKey]?.[acao] ?? false;
   };
 
@@ -449,6 +466,468 @@ export default function Dashboard() {
       await supabase.from('auditoria').upsert(item);
     } catch (err) {
       console.error('Erro ao gravar log de auditoria no Supabase:', err);
+    }
+  };
+
+  const exportarParaExcel = (dados: any[], nomeArquivo: string) => {
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+    XLSX.writeFile(wb, `${nomeArquivo}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const obterAlertaPrazoDemanda = (prazoFinal: string, status: string) => {
+    if (status === 'Concluída') return null;
+    const hoje = new Date();
+    hoje.setHours(0,0,0,0);
+    const prazo = new Date(prazoFinal);
+    prazo.setHours(0,0,0,0);
+
+    const diffTempo = prazo.getTime() - hoje.getTime();
+    const diffDias = Math.ceil(diffTempo / (1000 * 60 * 60 * 24));
+
+    if (diffDias < 0) {
+      return { tipo: 'vencida', texto: `🚨 Vencida há ${Math.abs(diffDias)} dia(s)!`, cor: 'bg-red-600 text-white' };
+    } else if (diffDias <= 3) {
+      return { tipo: 'urgente', texto: `⚠️ Vence em ${diffDias === 0 ? 'hoje' : `${diffDias} dia(s)`}!`, cor: 'bg-amber-500 text-white' };
+    }
+    return null;
+  };
+
+  const salvarDemanda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formDemanda.id || crypto.randomUUID();
+    const item: Demanda = {
+      id,
+      codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
+      titulo: formDemanda.titulo || '',
+      descricao: formDemanda.descricao || '',
+      responsavel_nome: formDemanda.responsavel_nome || '',
+      cadastrado_por: formDemanda.cadastrado_por || usuarioLogado?.nome_completo || 'Sistema',
+      concluido_por: formDemanda.status === 'Concluída' ? (formDemanda.concluido_por || usuarioLogado?.nome_completo || 'Sistema') : undefined,
+      eh_coracao: formDemanda.eh_coracao || false,
+      prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
+      prioridade: formDemanda.prioridade || 'Média',
+      status: formDemanda.status || 'Em andamento',
+      anexos: formDemanda.anexos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('demandas').upsert(item);
+      if (error) throw error;
+
+      if (formDemanda.id) {
+        setDemandas(demandas.map((d) => (d.id === id ? item : d)));
+      } else {
+        setDemandas([...demandas, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Demanda', 'Demandas', `Demanda ${item.codigo}: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar demanda: ${err.message || err}`);
+    }
+  };
+
+  const marcarDemandaConcluida = async (d: Demanda) => {
+    const dAtualizada: Demanda = {
+      ...d,
+      status: 'Concluída',
+      concluido_por: usuarioLogado?.nome_completo || 'Sistema',
+    };
+    try {
+      const { error } = await supabase.from('demandas').upsert(dAtualizada);
+      if (error) throw error;
+      setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
+      registrarAuditoria('Conclusão Demanda', 'Demandas', `Demanda ${d.codigo} concluída por ${usuarioLogado?.nome_completo || 'Sistema'}`);
+    } catch (err: any) {
+      alert(`Erro ao atualizar demanda: ${err.message || err}`);
+    }
+  };
+
+  // CORREÇÃO: ENVIA NULL SE A DATA DE DESLIGAMENTO ESTIVER VAZIA
+  const salvarMembro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMembro.id || crypto.randomUUID();
+    const payload: Membro = {
+      id,
+      matricula: formMembro.matricula || '',
+      nome_completo: formMembro.nome_completo || '',
+      foto_dataurl: formMembro.foto_dataurl || '',
+      cpf: formMembro.cpf || '',
+      email_institucional: formMembro.email_institucional || '',
+      email_alternativo: formMembro.email_alternativo || '',
+      instagram: formMembro.instagram || '',
+      orcid_link: formMembro.orcid_link || '',
+      lattes_link: formMembro.lattes_link || '',
+      endereco: formMembro.endereco || '',
+      financiamento: formMembro.financiamento || '',
+      telefone: formMembro.telefone || '',
+      curso_formacao: formMembro.curso_formacao || '',
+      instituicao: formMembro.instituicao || '',
+      categoria: formMembro.categoria || 'Pesquisadores',
+      funcao_cargo: formMembro.funcao_cargo || '',
+      data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
+      data_desligamento: formMembro.data_desligamento && formMembro.data_desligamento.trim() !== '' 
+        ? formMembro.data_desligamento 
+        : null,
+      situacao: formMembro.situacao || 'Ativo',
+      historico_afastamentos: formMembro.historico_afastamentos || [],
+    };
+
+    try {
+      const { error } = await supabase.from('membros').upsert(payload);
+      if (error) throw error;
+
+      if (formMembro.id) {
+        setMembros(membros.map((m) => (m.id === id ? payload : m)));
+      } else {
+        setMembros([...membros, payload]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Membro', 'Membros', `Membro ${payload.nome_completo} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar membro: ${err.message || err}`);
+    }
+  };
+
+  const salvarAfastamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formMembro.id) return;
+
+    const novoAfastamento: RegistroAfastamento = {
+      id: crypto.randomUUID(),
+      tipo: formAfastamento.tipo || 'Licença',
+      data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
+      data_fim: formAfastamento.data_fim || '',
+      motivo: formAfastamento.motivo || '',
+    };
+
+    const historicoAtualizado = [...(formMembro.historico_afastamentos || []), novoAfastamento];
+    const membroAtualizado: Membro = {
+      ...(formMembro as Membro),
+      situacao: 'Em Afastamento/Licença',
+      historico_afastamentos: historicoAtualizado,
+    };
+
+    try {
+      const { error } = await supabase.from('membros').upsert(membroAtualizado);
+      if (error) throw error;
+
+      setMembros(membros.map((m) => (m.id === formMembro.id ? membroAtualizado : m)));
+      setModalAtivo(null);
+      setFormAfastamento({});
+      registrarAuditoria('Registrar Licença', 'Membros', `Ausência registrada para ${formMembro.nome_completo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar licença: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaborador = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaborador.id || crypto.randomUUID();
+    const item: ColaboradorExterno = {
+      id,
+      nome: formColaborador.nome || '',
+      cpf: formColaborador.cpf || '',
+      titulacao: formColaborador.titulacao || 'Doutor',
+      email: formColaborador.email || '',
+      orcid: formColaborador.orcid || '',
+      numero_conselho: formColaborador.numero_conselho || '',
+      afiliacao: formColaborador.afiliacao || '',
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores').upsert(item);
+      if (error) throw error;
+
+      if (formColaborador.id) {
+        setColaboradores(colaboradores.map((c) => (c.id === id ? item : c)));
+      } else {
+        setColaboradores([...colaboradores, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador', 'Colaboradores', `Colaborador ${item.nome} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador: ${err.message || err}`);
+    }
+  };
+
+  const salvarColaboradorFinanceiro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formColaboradorFinanceiro.id || crypto.randomUUID();
+    const item: ColaboradorFinanceiro = {
+      id,
+      nome: formColaboradorFinanceiro.nome || '',
+      cpf: formColaboradorFinanceiro.cpf || '',
+      titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
+      email: formColaboradorFinanceiro.email || '',
+      orcid: formColaboradorFinanceiro.orcid || '',
+      numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
+      afiliacao: formColaboradorFinanceiro.afiliacao || '',
+      evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
+      valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
+      status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
+      data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
+    };
+
+    try {
+      const { error } = await supabase.from('colaboradores_financeiros').upsert(item);
+      if (error) throw error;
+
+      if (formColaboradorFinanceiro.id) {
+        setColaboradoresFinanceiros(colaboradoresFinanceiros.map((cf) => (cf.id === id ? item : cf)));
+      } else {
+        setColaboradoresFinanceiros([...colaboradoresFinanceiros, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Colaborador Financeiro', 'Colaboradores', `Aba 3: ${item.nome}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar colaborador financeiro: ${err.message || err}`);
+    }
+  };
+
+  const salvarMovimentacao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMovimentacao.id || crypto.randomUUID();
+    const item: MovimentacaoFinanceira = {
+      id,
+      descricao: formMovimentacao.descricao || '',
+      valor: Number(formMovimentacao.valor || 0),
+      tipo: formMovimentacao.tipo || 'Entrada',
+      categoria: formMovimentacao.categoria || 'Outros',
+      data: formMovimentacao.data || new Date().toISOString().split('T')[0],
+      membro_id: formMovimentacao.membro_id,
+      membro_nome: formMovimentacao.membro_nome,
+      observacoes: formMovimentacao.observacoes,
+    };
+
+    try {
+      const { error } = await supabase.from('movimentacoes').upsert(item);
+      if (error) throw error;
+
+      if (formMovimentacao.id) {
+        setMovimentacoes(movimentacoes.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMovimentacoes([...movimentacoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Lançamento Caixa', 'Financeiro', `Caixa: ${item.tipo} - R$ ${item.valor}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar caixa: ${err.message || err}`);
+    }
+  };
+
+  const salvarProjeto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProjeto.id || crypto.randomUUID();
+    const docentesArr = formDocentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+    const discentesArr = formDiscentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
+
+    const item: ProjetoPesquisa = {
+      id,
+      titulo: formProjeto.titulo || '',
+      coordenador: formProjeto.coordenador || '',
+      linha_pesquisa: formProjeto.linha_pesquisa || '',
+      docentes: docentesArr,
+      discentes: discentesArr,
+      parecer_cep: formProjeto.parecer_cep || '',
+      caee_cep: formProjeto.caee_cep || '',
+      financiamento: formProjeto.financiamento || '',
+      observacoes: formProjeto.observacoes || '',
+      status: formProjeto.status || 'Em aberto',
+      artigos_derivados: formProjeto.artigos_derivados || [],
+      anexos: formProjeto.anexos || [],
+      parecer_cep_arquivo_dataurl: formProjeto.parecer_cep_arquivo_dataurl || '',
+      parecer_cep_arquivo_nome: formProjeto.parecer_cep_arquivo_nome || '',
+    };
+
+    try {
+      const { error } = await supabase.from('projetos').upsert(item);
+      if (error) throw error;
+
+      if (formProjeto.id) {
+        setProjetos(projetos.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProjetos([...projetos, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Projeto', 'Projetos', `Projeto: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar projeto: ${err.message || err}`);
+    }
+  };
+const adicionarArtigoDerivadoNoProjeto = () => {
+    if (!formArtigoDerivado.titulo || !formArtigoDerivado.revista) {
+      alert('Preencha o título e a revista do artigo derivado.');
+      return;
+    }
+    const novoArtigo: ArtigoDerivado = {
+      id: crypto.randomUUID(),
+      titulo: formArtigoDerivado.titulo || '',
+      revista: formArtigoDerivado.revista || '',
+      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
+      status: formArtigoDerivado.status || 'em produção',
+      anexos: formArtigoDerivado.anexos || [],
+    };
+
+    setFormProjeto({
+      ...formProjeto,
+      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArtigo],
+    });
+    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
+  };
+
+  const salvarProducao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formProducao.id || crypto.randomUUID();
+    const item: ProducaoCientifica = {
+      id,
+      categoria_producao: formProducao.categoria_producao || 'Periódico',
+      tipo_producao: formProducao.tipo_producao || 'Artigo Científico',
+      titulo: formProducao.titulo || '',
+      evento_ou_revista: formProducao.evento_ou_revista || '',
+      autor_principal: formProducao.autor_principal || '',
+      coautores: formProducao.coautores || '',
+      ano_publicacao: formProducao.ano_publicacao || '2026',
+      qualis_doi: formProducao.qualis_doi || 'N/A',
+      status: formProducao.status || 'Publicado',
+    };
+
+    try {
+      const { error } = await supabase.from('producoes').upsert(item);
+      if (error) throw error;
+
+      if (formProducao.id) {
+        setProducoes(producoes.map((p) => (p.id === id ? item : p)));
+      } else {
+        setProducoes([...producoes, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Produção', 'Produções', `Produção: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar produção: ${err.message || err}`);
+    }
+  };
+
+  const salvarMetaAnual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item: MetaAnualProducao = {
+      ano: formMetaAnual.ano || '2026',
+      meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
+      meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
+      meta_resumos: Number(formMetaAnual.meta_resumos || 0),
+    };
+
+    try {
+      const { error } = await supabase.from('metas_anuais').upsert(item);
+      if (error) throw error;
+
+      const idx = metasAnuais.findIndex((m) => m.ano === item.ano);
+      if (idx >= 0) {
+        const copy = [...metasAnuais];
+        copy[idx] = item;
+        setMetasAnuais(copy);
+      } else {
+        setMetasAnuais([...metasAnuais, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Meta Anual', 'Produções', `Meta ano ${item.ano} salva`);
+    } catch (err: any) {
+      alert(`Erro ao salvar meta: ${err.message || err}`);
+    }
+  };
+
+  const salvarReuniao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formReuniao.id || crypto.randomUUID();
+    const listaPresencas = membrosAtivos.map((m) => ({
+      membro_id: m.id,
+      membro_nome: m.nome_completo,
+      status: presencasChamada[m.id] || 'presente',
+    }));
+
+    const item: ReuniaoCientifica = {
+      id,
+      titulo: formReuniao.titulo || 'Encontro Científico',
+      data: formReuniao.data || new Date().toISOString().split('T')[0],
+      horario: formReuniao.horario || '19:00',
+      pauta: formReuniao.pauta || '',
+      presencas: listaPresencas,
+    };
+
+    try {
+      const { error } = await supabase.from('reunioes').upsert(item);
+      if (error) throw error;
+
+      if (formReuniao.id) {
+        setReunioes(reunioes.map((r) => (r.id === id ? item : r)));
+      } else {
+        setReunioes([...reunioes, item]);
+      }
+      setModalAtivo(null);
+      setPresencasChamada({});
+      registrarAuditoria('Salvar Reunião', 'Reuniões', `Reunião ${item.titulo} salva`);
+    } catch (err: any) {
+      alert(`Erro ao salvar reunião: ${err.message || err}`);
+    }
+  };
+
+  const salvarPatrimonio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formPatrimonio.id || crypto.randomUUID();
+    const item: PatrimonioProduto = {
+      id,
+      nome: formPatrimonio.nome || '',
+      descricao: formPatrimonio.descricao || '',
+      quantidade: Number(formPatrimonio.quantidade || 1),
+      foto_dataurl: formPatrimonio.foto_dataurl || '',
+      estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
+      responsavel: formPatrimonio.responsavel || '',
+    };
+
+    try {
+      const { error } = await supabase.from('patrimonio').upsert(item);
+      if (error) throw error;
+
+      if (formPatrimonio.id) {
+        setPatrimonio(patrimonio.map((p) => (p.id === id ? item : p)));
+      } else {
+        setPatrimonio([...patrimonio, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Patrimônio', 'Patrimônio', `Item: ${item.nome}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar patrimônio: ${err.message || err}`);
+    }
+  };
+
+  const salvarMarketing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = formMarketing.id || crypto.randomUUID();
+    const item: MarketingItem = {
+      id,
+      titulo: formMarketing.titulo || '',
+      canal: formMarketing.canal || 'Instagram',
+      responsavel: formMarketing.responsavel || '',
+      data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
+      status: formMarketing.status || 'Ideia',
+      legenda: formMarketing.legenda || '',
+      artes: formMarketing.artes || [],
+    };
+
+    try {
+      const { error } = await supabase.from('marketing').upsert(item);
+      if (error) throw error;
+
+      if (formMarketing.id) {
+        setMarketing(marketing.map((m) => (m.id === id ? item : m)));
+      } else {
+        setMarketing([...marketing, item]);
+      }
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Marketing', 'Marketing', `Ação: ${item.titulo}`);
+    } catch (err: any) {
+      alert(`Erro ao salvar mídia: ${err.message || err}`);
     }
   };
 
@@ -541,94 +1020,6 @@ export default function Dashboard() {
       setModalAtivo(null);
     }
   };
-
-  // CÁLCULO DE CAIXA
-  const totalReceitasColaboradoresAba3 = colaboradoresFinanceiros.reduce(
-    (acc, col) => acc + extrairValorNumerico(col.valor_pago),
-    0
-  );
-  const totalMensalidadesPagas = mensalidades.filter((m) => m.status === 'Pago').reduce((acc, m) => acc + Number(m.valor || 0), 0);
-  const totalEventosEspeciaisPagos = eventosEspeciais.filter((e) => e.status === 'Pago').reduce((acc, e) => acc + Number(e.valor || 0), 0);
-  const totalEntradasManuais = movimentacoes.filter((m) => m.tipo === 'Entrada').reduce((acc, m) => acc + Number(m.valor || 0), 0);
-  const totalSaidasManuais = movimentacoes.filter((m) => m.tipo === 'Saída').reduce((acc, m) => acc + Number(m.valor || 0), 0);
-
-  const totalEntradasGeral = totalReceitasColaboradoresAba3 + totalMensalidadesPagas + totalEventosEspeciaisPagos + totalEntradasManuais;
-  const totalSaidasGeral = totalSaidasManuais;
-  const saldoCaixaAtual = totalEntradasGeral - totalSaidasGeral;
-
-  const obterTodasMovimentacoesUnificadas = () => {
-    const lista: (MovimentacaoFinanceira & { origem_badge?: string })[] = [
-      ...movimentacoes.map((m) => ({ ...m, origem_badge: 'Lançamento Manual' })),
-    ];
-
-    colaboradoresFinanceiros.forEach((col) => {
-      const v = extrairValorNumerico(col.valor_pago);
-      if (v > 0) {
-        lista.push({
-          id: `colab-auto-${col.id}`,
-          descricao: `Adquirição: ${col.evento_ou_artigo} (${col.nome})`,
-          valor: v,
-          tipo: 'Entrada',
-          categoria: 'Inscrição / Publicação',
-          data: col.data_registro || '2026-08-10',
-          observacoes: `Integrado da Aba 3 • Status: ${col.status_publicacao}`,
-          origem_badge: 'Colaborador Aba 3',
-        });
-      }
-    });
-
-    mensalidades.forEach((ms) => {
-      if (ms.status === 'Pago') {
-        const mb = membros.find((m) => m.id === ms.membro_id);
-        const nomeMes = NOMES_MESES[ms.mes - 1] || `Mês ${ms.mes}`;
-        lista.push({
-          id: `mens-auto-${ms.id}`,
-          descricao: `Mensalidade ${nomeMes}/${ms.ano} - ${mb?.nome_completo || 'Membro'}`,
-          valor: ms.valor,
-          tipo: 'Entrada',
-          categoria: 'Mensalidade',
-          data: ms.data_pagamento || new Date().toISOString().split('T')[0],
-          membro_id: ms.membro_id,
-          membro_nome: mb?.nome_completo,
-          origem_badge: 'Mensalidade Membro',
-        });
-      }
-    });
-
-    eventosEspeciais.forEach((ee) => {
-      if (ee.status === 'Pago') {
-        const mb = membros.find((m) => m.id === ee.membro_id);
-        lista.push({
-          id: `ee-auto-${ee.id}`,
-          descricao: `Taxa ${ee.evento} - ${mb?.nome_completo || 'Membro'}`,
-          valor: ee.valor,
-          tipo: 'Entrada',
-          categoria: ee.evento === 'Day Off' ? 'Day Off' : 'São João',
-          data: ee.data_pagamento || new Date().toISOString().split('T')[0],
-          membro_id: ee.membro_id,
-          membro_nome: mb?.nome_completo,
-          origem_badge: `Evento ${ee.evento}`,
-        });
-      }
-    });
-
-    return lista.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-  };
-
-  const movimentacoesFiltradas = obterTodasMovimentacoesUnificadas().filter((item) => {
-    const atendeTipo = filtroFinTipo === 'Todos' || item.tipo === filtroFinTipo;
-    const atendeCategoria = filtroFinCategoria === 'Todas' || item.categoria === filtroFinCategoria;
-    const atendeBusca = termoBusca
-      ? item.descricao.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        (item.membro_nome && item.membro_nome.toLowerCase().includes(termoBusca.toLowerCase()))
-      : true;
-
-    let atendeData = true;
-    if (filtroFinDataInicio) atendeData = atendeData && new Date(item.data) >= new Date(filtroFinDataInicio);
-    if (filtroFinDataFim) atendeData = atendeData && new Date(item.data) <= new Date(filtroFinDataFim);
-
-    return atendeTipo && atendeCategoria && atendeBusca && atendeData;
-  });
 
   const salvarEdicaoMensalidade = async () => {
     const { membro_id, ano, mes, valor, status, data_pagamento } = formEdicaoMensalidade;
@@ -891,78 +1282,6 @@ export default function Dashboard() {
     return Object.values(contagem);
   };
 
-  const anoAtual = '2026';
-  const metaAtual = metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 };
-
-  const artigosProduzidosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_publicacao || anoAtual) === anoAtual).length;
-  const artigosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
-  const resumosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Congresso' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
-
-  const pctArtigosProduzidos = Math.min(Math.round((artigosProduzidosAnoAtual / (metaAtual.meta_artigos_produzidos || 1)) * 100), 100);
-  const pctArtigosPublicados = Math.min(Math.round((artigosPublicadosAnoAtual / (metaAtual.meta_artigos_publicados || 1)) * 100), 100);
-  const pctResumos = Math.min(Math.round((resumosPublicadosAnoAtual / (metaAtual.meta_resumos || 1)) * 100), 100);
-
-  const congressosAgrupados = producoes
-    .filter((p) => p.categoria_producao === 'Congresso')
-    .reduce<{ [evento: string]: ProducaoCientifica[] }>((acc, p) => {
-      const ev = p.evento_ou_revista.trim() || 'Evento Geral';
-      if (!acc[ev]) acc[ev] = [];
-      acc[ev].push(p);
-      return acc;
-    }, {});
-
-  const listaEventosCompradores = Array.from(
-    new Set([
-      ...colaboradoresFinanceiros.map((c) => c.evento_ou_artigo),
-      ...producoes.filter((p) => p.categoria_producao === 'Congresso').map((p) => p.evento_ou_revista),
-    ])
-  );
-
-  const colaboradoresFinanceirosFiltrados = colaboradoresFinanceiros.filter((c) => {
-    const atendeEvento = filtroEventoFinanceiro === 'Todos' || c.evento_ou_artigo === filtroEventoFinanceiro;
-    const atendeBusca = termoBusca ? c.nome.toLowerCase().includes(termoBusca.toLowerCase()) || c.email.toLowerCase().includes(termoBusca.toLowerCase()) || c.cpf.includes(termoBusca) : true;
-    return atendeEvento && atendeBusca;
-  });
-
-  const listaResponsaveisDemandas = Array.from(
-    new Set(demandas.map((d) => d.responsavel_nome).filter(Boolean))
-  );
-
-  const demandasFiltradas = demandas.filter((d) => {
-    const atendeStatus = filtroDemandaStatus === 'Todos' || d.status === filtroDemandaStatus;
-    const atendeResponsavel = filtroDemandaResponsavel === 'Todos' || d.responsavel_nome === filtroDemandaResponsavel;
-    const atendeBusca = termoBusca
-      ? d.titulo.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        d.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        d.descricao.toLowerCase().includes(termoBusca.toLowerCase())
-      : true;
-
-    return atendeStatus && atendeResponsavel && atendeBusca;
-  });
-
-  const demandasPendentes = demandasFiltradas.filter((d) => d.status !== 'Concluída');
-  const demandasConcluidas = demandasFiltradas.filter((d) => d.status === 'Concluída');
-  const demandasOrdenadas = [...demandasPendentes, ...demandasConcluidas];
-
-  const calcularResumoFaltas = () => {
-    const mapaFaltas: { [membroId: string]: { nome: string; faltas: number; justificadas: number; presencas: number } } = {};
-    membros.forEach((m) => {
-      mapaFaltas[m.id] = { nome: m.nome_completo, faltas: 0, justificadas: 0, presencas: 0 };
-    });
-
-    reunioes.forEach((r) => {
-      r.presencas.forEach((p) => {
-        if (mapaFaltas[p.membro_id]) {
-          if (p.status === 'falta') mapaFaltas[p.membro_id].faltas += 1;
-          if (p.status === 'falta_justificada') mapaFaltas[p.membro_id].justificadas += 1;
-          if (p.status === 'presente') mapaFaltas[p.membro_id].presencas += 1;
-        }
-      });
-    });
-
-    return Object.values(mapaFaltas);
-  };
-
   const handleExcluir = async (categoria: string, id: string) => {
     if (!temPermissao(categoria, 'editar')) {
       alert('Você não possui permissão para excluir registros neste módulo.');
@@ -997,419 +1316,190 @@ export default function Dashboard() {
     }
   };
 
-  // FUNÇÕES DE SALVAMENTO DE TODOS OS MÓDULOS
-  const salvarMembro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMembro.id || crypto.randomUUID();
-    const payload: Membro = {
-      id,
-      matricula: formMembro.matricula || '',
-      nome_completo: formMembro.nome_completo || '',
-      foto_dataurl: formMembro.foto_dataurl || '',
-      cpf: formMembro.cpf || '',
-      email_institucional: formMembro.email_institucional || '',
-      email_alternativo: formMembro.email_alternativo || '',
-      instagram: formMembro.instagram || '',
-      orcid_link: formMembro.orcid_link || '',
-      lattes_link: formMembro.lattes_link || '',
-      endereco: formMembro.endereco || '',
-      financiamento: formMembro.financiamento || '',
-      telefone: formMembro.telefone || '',
-      curso_formacao: formMembro.curso_formacao || '',
-      instituicao: formMembro.instituicao || '',
-      categoria: formMembro.categoria || 'Pesquisadores',
-      funcao_cargo: formMembro.funcao_cargo || '',
-      data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
-      data_desligamento: formMembro.data_desligamento || '',
-      situacao: formMembro.situacao || 'Ativo',
-      historico_afastamentos: formMembro.historico_afastamentos || [],
-    };
+  // CÁLCULO DE CAIXA
+  const totalReceitasColaboradoresAba3 = colaboradoresFinanceiros.reduce(
+    (acc, col) => acc + extrairValorNumerico(col.valor_pago),
+    0
+  );
+  const totalMensalidadesPagas = mensalidades.filter((m) => m.status === 'Pago').reduce((acc, m) => acc + Number(m.valor || 0), 0);
+  const totalEventosEspeciaisPagos = eventosEspeciais.filter((e) => e.status === 'Pago').reduce((acc, e) => acc + Number(e.valor || 0), 0);
+  const totalEntradasManuais = movimentacoes.filter((m) => m.tipo === 'Entrada').reduce((acc, m) => acc + Number(m.valor || 0), 0);
+  const totalSaidasManuais = movimentacoes.filter((m) => m.tipo === 'Saída').reduce((acc, m) => acc + Number(m.valor || 0), 0);
 
-    try {
-      const { error } = await supabase.from('membros').upsert(payload);
-      if (error) throw error;
+  const totalEntradasGeral = totalReceitasColaboradoresAba3 + totalMensalidadesPagas + totalEventosEspeciaisPagos + totalEntradasManuais;
+  const totalSaidasGeral = totalSaidasManuais;
+  const saldoCaixaAtual = totalEntradasGeral - totalSaidasGeral;
 
-      if (formMembro.id) {
-        setMembros(membros.map((m) => (m.id === id ? payload : m)));
-      } else {
-        setMembros([...membros, payload]);
+  const obterTodasMovimentacoesUnificadas = () => {
+    const lista: (MovimentacaoFinanceira & { origem_badge?: string })[] = [
+      ...movimentacoes.map((m) => ({ ...m, origem_badge: 'Lançamento Manual' })),
+    ];
+
+    colaboradoresFinanceiros.forEach((col) => {
+      const v = extrairValorNumerico(col.valor_pago);
+      if (v > 0) {
+        lista.push({
+          id: `colab-auto-${col.id}`,
+          descricao: `Adquirição: ${col.evento_ou_artigo} (${col.nome})`,
+          valor: v,
+          tipo: 'Entrada',
+          categoria: 'Inscrição / Publicação',
+          data: col.data_registro || '2026-08-10',
+          observacoes: `Integrado da Aba 3 • Status: ${col.status_publicacao}`,
+          origem_badge: 'Colaborador Aba 3',
+        });
       }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Membro', 'Membros', `Membro ${payload.nome_completo} salvo`);
-    } catch (err: any) {
-      alert(`Erro ao salvar membro: ${err.message || err}`);
-    }
-  };
-
-  const salvarAfastamento = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formMembro.id) return;
-
-    const novoAfastamento: RegistroAfastamento = {
-      id: crypto.randomUUID(),
-      tipo: formAfastamento.tipo || 'Licença',
-      data_inicio: formAfastamento.data_inicio || new Date().toISOString().split('T')[0],
-      data_fim: formAfastamento.data_fim || '',
-      motivo: formAfastamento.motivo || '',
-    };
-
-    const historicoAtualizado = [...(formMembro.historico_afastamentos || []), novoAfastamento];
-    const membroAtualizado: Membro = {
-      ...(formMembro as Membro),
-      situacao: 'Em Afastamento/Licença',
-      historico_afastamentos: historicoAtualizado,
-    };
-
-    try {
-      const { error } = await supabase.from('membros').upsert(membroAtualizado);
-      if (error) throw error;
-
-      setMembros(membros.map((m) => (m.id === formMembro.id ? membroAtualizado : m)));
-      setModalAtivo(null);
-      setFormAfastamento({});
-      registrarAuditoria('Registrar Licença', 'Membros', `Ausência registrada para ${formMembro.nome_completo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar licença: ${err.message || err}`);
-    }
-  };
-
-  const salvarColaborador = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formColaborador.id || crypto.randomUUID();
-    const item: ColaboradorExterno = {
-      id,
-      nome: formColaborador.nome || '',
-      cpf: formColaborador.cpf || '',
-      titulacao: formColaborador.titulacao || 'Doutor',
-      email: formColaborador.email || '',
-      orcid: formColaborador.orcid || '',
-      numero_conselho: formColaborador.numero_conselho || '',
-      afiliacao: formColaborador.afiliacao || '',
-    };
-
-    try {
-      const { error } = await supabase.from('colaboradores').upsert(item);
-      if (error) throw error;
-
-      if (formColaborador.id) {
-        setColaboradores(colaboradores.map((c) => (c.id === id ? item : c)));
-      } else {
-        setColaboradores([...colaboradores, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Colaborador', 'Colaboradores', `Colaborador ${item.nome} salvo`);
-    } catch (err: any) {
-      alert(`Erro ao salvar colaborador: ${err.message || err}`);
-    }
-  };
-
-  const salvarColaboradorFinanceiro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formColaboradorFinanceiro.id || crypto.randomUUID();
-    const item: ColaboradorFinanceiro = {
-      id,
-      nome: formColaboradorFinanceiro.nome || '',
-      cpf: formColaboradorFinanceiro.cpf || '',
-      titulacao: formColaboradorFinanceiro.titulacao || 'Doutor',
-      email: formColaboradorFinanceiro.email || '',
-      orcid: formColaboradorFinanceiro.orcid || '',
-      numero_conselho: formColaboradorFinanceiro.numero_conselho || '',
-      afiliacao: formColaboradorFinanceiro.afiliacao || '',
-      evento_ou_artigo: formColaboradorFinanceiro.evento_ou_artigo || '',
-      valor_pago: formColaboradorFinanceiro.valor_pago || 'R$ 0,00',
-      status_publicacao: formColaboradorFinanceiro.status_publicacao || 'Em análise',
-      data_registro: formColaboradorFinanceiro.data_registro || new Date().toISOString().split('T')[0],
-    };
-
-    try {
-      const { error } = await supabase.from('colaboradores_financeiros').upsert(item);
-      if (error) throw error;
-
-      if (formColaboradorFinanceiro.id) {
-        setColaboradoresFinanceiros(colaboradoresFinanceiros.map((cf) => (cf.id === id ? item : cf)));
-      } else {
-        setColaboradoresFinanceiros([...colaboradoresFinanceiros, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Colaborador Financeiro', 'Colaboradores', `Aba 3: ${item.nome}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar colaborador financeiro: ${err.message || err}`);
-    }
-  };
-
-  const salvarMovimentacao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMovimentacao.id || crypto.randomUUID();
-    const item: MovimentacaoFinanceira = {
-      id,
-      descricao: formMovimentacao.descricao || '',
-      valor: Number(formMovimentacao.valor || 0),
-      tipo: formMovimentacao.tipo || 'Entrada',
-      categoria: formMovimentacao.categoria || 'Outros',
-      data: formMovimentacao.data || new Date().toISOString().split('T')[0],
-      membro_id: formMovimentacao.membro_id,
-      membro_nome: formMovimentacao.membro_nome,
-      observacoes: formMovimentacao.observacoes,
-    };
-
-    try {
-      const { error } = await supabase.from('movimentacoes').upsert(item);
-      if (error) throw error;
-
-      if (formMovimentacao.id) {
-        setMovimentacoes(movimentacoes.map((m) => (m.id === id ? item : m)));
-      } else {
-        setMovimentacoes([...movimentacoes, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Lançamento Caixa', 'Financeiro', `Caixa: ${item.tipo} - R$ ${item.valor}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar caixa: ${err.message || err}`);
-    }
-  };
-
-  const salvarProjeto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formProjeto.id || crypto.randomUUID();
-    const docentesArr = formDocentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
-    const discentesArr = formDiscentesTexto.split(',').map((s) => s.trim()).filter(Boolean);
-
-    const item: ProjetoPesquisa = {
-      id,
-      titulo: formProjeto.titulo || '',
-      coordenador: formProjeto.coordenador || '',
-      linha_pesquisa: formProjeto.linha_pesquisa || '',
-      docentes: docentesArr,
-      discentes: discentesArr,
-      parecer_cep: formProjeto.parecer_cep || '',
-      caee_cep: formProjeto.caee_cep || '',
-      financiamento: formProjeto.financiamento || '',
-      observacoes: formProjeto.observacoes || '',
-      status: formProjeto.status || 'Em aberto',
-      artigos_derivados: formProjeto.artigos_derivados || [],
-      anexos: formProjeto.anexos || [],
-    };
-
-    try {
-      const { error } = await supabase.from('projetos').upsert(item);
-      if (error) throw error;
-
-      if (formProjeto.id) {
-        setProjetos(projetos.map((p) => (p.id === id ? item : p)));
-      } else {
-        setProjetos([...projetos, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Projeto', 'Projetos', `Projeto: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar projeto: ${err.message || err}`);
-    }
-  };
-
-  const adicionarArtigoDerivadoNoProjeto = () => {
-    if (!formArtigoDerivado.titulo || !formArtigoDerivado.revista) {
-      alert('Preencha o título e a revista do artigo derivado.');
-      return;
-    }
-    const novoArtigo: ArtigoDerivado = {
-      id: crypto.randomUUID(),
-      titulo: formArtigoDerivado.titulo || '',
-      revista: formArtigoDerivado.revista || '',
-      qualis_jcr_cite: formArtigoDerivado.qualis_jcr_cite || '',
-      status: formArtigoDerivado.status || 'em produção',
-      anexos: formArtigoDerivado.anexos || [],
-    };
-
-    setFormProjeto({
-      ...formProjeto,
-      artigos_derivados: [...(formProjeto.artigos_derivados || []), novoArtigo],
     });
-    setFormArtigoDerivado({ status: 'em produção', anexos: [] });
+
+    mensalidades.forEach((ms) => {
+      if (ms.status === 'Pago') {
+        const mb = membros.find((m) => m.id === ms.membro_id);
+        const nomeMes = NOMES_MESES[ms.mes - 1] || `Mês ${ms.mes}`;
+        lista.push({
+          id: `mens-auto-${ms.id}`,
+          descricao: `Mensalidade ${nomeMes}/${ms.ano} - ${mb?.nome_completo || 'Membro'}`,
+          valor: ms.valor,
+          tipo: 'Entrada',
+          categoria: 'Mensalidade',
+          data: ms.data_pagamento || new Date().toISOString().split('T')[0],
+          membro_id: ms.membro_id,
+          membro_nome: mb?.nome_completo,
+          origem_badge: 'Mensalidade Membro',
+        });
+      }
+    });
+
+    eventosEspeciais.forEach((ee) => {
+      if (ee.status === 'Pago') {
+        const mb = membros.find((m) => m.id === ee.membro_id);
+        lista.push({
+          id: `ee-auto-${ee.id}`,
+          descricao: `Taxa ${ee.evento} - ${mb?.nome_completo || 'Membro'}`,
+          valor: ee.valor,
+          tipo: 'Entrada',
+          categoria: ee.evento === 'Day Off' ? 'Day Off' : 'São João',
+          data: ee.data_pagamento || new Date().toISOString().split('T')[0],
+          membro_id: ee.membro_id,
+          membro_nome: mb?.nome_completo,
+          origem_badge: `Evento ${ee.evento}`,
+        });
+      }
+    });
+
+    return lista.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
   };
 
-  const salvarDemanda = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formDemanda.id || crypto.randomUUID();
-    const item: Demanda = {
-      id,
-      codigo: formDemanda.codigo || `DEM-${Math.floor(1000 + Math.random() * 9000)}`,
-      titulo: formDemanda.titulo || '',
-      descricao: formDemanda.descricao || '',
-      responsavel_nome: formDemanda.responsavel_nome || '',
-      prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
-      prioridade: formDemanda.prioridade || 'Média',
-      status: formDemanda.status || 'Em andamento',
-      anexos: formDemanda.anexos || [],
-    };
+  const movimentacoesFiltradas = obterTodasMovimentacoesUnificadas().filter((item) => {
+    const atendeTipo = filtroFinTipo === 'Todos' || item.tipo === filtroFinTipo;
+    const atendeCategoria = filtroFinCategoria === 'Todas' || item.categoria === filtroFinCategoria;
+    const atendeBusca = termoBusca
+      ? item.descricao.toLowerCase().includes(termoBusca.toLowerCase()) ||
+        (item.membro_nome && item.membro_nome.toLowerCase().includes(termoBusca.toLowerCase()))
+      : true;
 
-    try {
-      const { error } = await supabase.from('demandas').upsert(item);
-      if (error) throw error;
+    let atendeData = true;
+    if (filtroFinDataInicio) atendeData = atendeData && new Date(item.data) >= new Date(filtroFinDataInicio);
+    if (filtroFinDataFim) atendeData = atendeData && new Date(item.data) <= new Date(filtroFinDataFim);
 
-      if (formDemanda.id) {
-        setDemandas(demandas.map((d) => (d.id === id ? item : d)));
-      } else {
-        setDemandas([...demandas, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Demanda', 'Demandas', `Demanda ${item.codigo}: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar demanda: ${err.message || err}`);
-    }
-  };
+    return atendeTipo && atendeCategoria && atendeBusca && atendeData;
+  });
 
-  const salvarProducao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formProducao.id || crypto.randomUUID();
-    const item: ProducaoCientifica = {
-      id,
-      categoria_producao: formProducao.categoria_producao || 'Periódico',
-      tipo_producao: formProducao.tipo_producao || 'Artigo Científico',
-      titulo: formProducao.titulo || '',
-      evento_ou_revista: formProducao.evento_ou_revista || '',
-      autor_principal: formProducao.autor_principal || '',
-      coautores: formProducao.coautores || '',
-      ano_publicacao: formProducao.ano_publicacao || '2026',
-      qualis_doi: formProducao.qualis_doi || 'N/A',
-      status: formProducao.status || 'Publicado',
-    };
+  const anoAtual = '2026';
+  const metaAtual = metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 };
 
-    try {
-      const { error } = await supabase.from('producoes').upsert(item);
-      if (error) throw error;
+  const artigosProduzidosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_publicacao || anoAtual) === anoAtual).length;
+  const artigosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
+  const resumosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Congresso' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
 
-      if (formProducao.id) {
-        setProducoes(producoes.map((p) => (p.id === id ? item : p)));
-      } else {
-        setProducoes([...producoes, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Produção', 'Produções', `Produção: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar produção: ${err.message || err}`);
-    }
-  };
+  const pctArtigosProduzidos = Math.min(Math.round((artigosProduzidosAnoAtual / (metaAtual.meta_artigos_produzidos || 1)) * 100), 100);
+  const pctArtigosPublicados = Math.min(Math.round((artigosPublicadosAnoAtual / (metaAtual.meta_artigos_publicados || 1)) * 100), 100);
+  const pctResumos = Math.min(Math.round((resumosPublicadosAnoAtual / (metaAtual.meta_resumos || 1)) * 100), 100);
 
-  const salvarMetaAnual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const item: MetaAnualProducao = {
-      ano: formMetaAnual.ano || '2026',
-      meta_artigos_produzidos: Number(formMetaAnual.meta_artigos_produzidos || 0),
-      meta_artigos_publicados: Number(formMetaAnual.meta_artigos_publicados || 0),
-      meta_resumos: Number(formMetaAnual.meta_resumos || 0),
-    };
+  const congressosAgrupados = producoes
+    .filter((p) => p.categoria_producao === 'Congresso')
+    .reduce<{ [evento: string]: ProducaoCientifica[] }>((acc, p) => {
+      const ev = p.evento_ou_revista.trim() || 'Evento Geral';
+      if (!acc[ev]) acc[ev] = [];
+      acc[ev].push(p);
+      return acc;
+    }, {});
 
-    try {
-      const { error } = await supabase.from('metas_anuais').upsert(item);
-      if (error) throw error;
+  const listaEventosCompradores = Array.from(
+    new Set([
+      ...colaboradoresFinanceiros.map((c) => c.evento_ou_artigo),
+      ...producoes.filter((p) => p.categoria_producao === 'Congresso').map((p) => p.evento_ou_revista),
+    ])
+  );
 
-      const idx = metasAnuais.findIndex((m) => m.ano === item.ano);
-      if (idx >= 0) {
-        const copy = [...metasAnuais];
-        copy[idx] = item;
-        setMetasAnuais(copy);
-      } else {
-        setMetasAnuais([...metasAnuais, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Meta Anual', 'Produções', `Meta ano ${item.ano} salva`);
-    } catch (err: any) {
-      alert(`Erro ao salvar meta: ${err.message || err}`);
-    }
-  };
+  const colaboradoresFinanceirosFiltrados = colaboradoresFinanceiros.filter((c) => {
+    const atendeEvento = filtroEventoFinanceiro === 'Todos' || c.evento_ou_artigo === filtroEventoFinanceiro;
+    const atendeBusca = termoBusca ? c.nome.toLowerCase().includes(termoBusca.toLowerCase()) || c.email.toLowerCase().includes(termoBusca.toLowerCase()) || c.cpf.includes(termoBusca) : true;
+    return atendeEvento && atendeBusca;
+  });
 
-  const salvarReuniao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formReuniao.id || crypto.randomUUID();
-    const listaPresencas = membrosAtivos.map((m) => ({
-      membro_id: m.id,
-      membro_nome: m.nome_completo,
-      status: presencasChamada[m.id] || 'presente',
-    }));
+  const demandasGerais = demandas.filter((d) => !d.eh_coracao);
+  const demandasCoracao = demandas.filter((d) => d.eh_coracao);
 
-    const item: ReuniaoCientifica = {
-      id,
-      titulo: formReuniao.titulo || 'Encontro Científico',
-      data: formReuniao.data || new Date().toISOString().split('T')[0],
-      horario: formReuniao.horario || '19:00',
-      pauta: formReuniao.pauta || '',
-      presencas: listaPresencas,
-    };
+  const listaResponsaveisDemandas = Array.from(
+    new Set(demandasGerais.map((d) => d.responsavel_nome).filter(Boolean))
+  );
 
-    try {
-      const { error } = await supabase.from('reunioes').upsert(item);
-      if (error) throw error;
+  const demandasFiltradas = demandasGerais.filter((d) => {
+    const atendeStatus = filtroDemandaStatus === 'Todos' || d.status === filtroDemandaStatus;
+    const atendeResponsavel = filtroDemandaResponsavel === 'Todos' || d.responsavel_nome === filtroDemandaResponsavel;
+    const atendeBusca = termoBusca
+      ? d.titulo.toLowerCase().includes(termoBusca.toLowerCase()) ||
+        d.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
+        d.descricao.toLowerCase().includes(termoBusca.toLowerCase())
+      : true;
 
-      if (formReuniao.id) {
-        setReunioes(reunioes.map((r) => (r.id === id ? item : r)));
-      } else {
-        setReunioes([...reunioes, item]);
-      }
-      setModalAtivo(null);
-      setPresencasChamada({});
-      registrarAuditoria('Salvar Reunião', 'Reuniões', `Reunião ${item.titulo} salva`);
-    } catch (err: any) {
-      alert(`Erro ao salvar reunião: ${err.message || err}`);
-    }
-  };
+    return atendeStatus && atendeResponsavel && atendeBusca;
+  });
 
-  const salvarPatrimonio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formPatrimonio.id || crypto.randomUUID();
-    const item: PatrimonioProduto = {
-      id,
-      nome: formPatrimonio.nome || '',
-      descricao: formPatrimonio.descricao || '',
-      quantidade: Number(formPatrimonio.quantidade || 1),
-      foto_dataurl: formPatrimonio.foto_dataurl || '',
-      estado_conservacao: formPatrimonio.estado_conservacao || 'Excelente',
-      responsavel: formPatrimonio.responsavel || '',
-    };
+  const demandasPendentes = demandasFiltradas.filter((d) => d.status !== 'Concluída');
+  const demandasConcluidas = demandasFiltradas.filter((d) => d.status === 'Concluída');
+  const demandasOrdenadas = [...demandasPendentes, ...demandasConcluidas];
 
-    try {
-      const { error } = await supabase.from('patrimonio').upsert(item);
-      if (error) throw error;
+  const demandasCoracaoPendentes = demandasCoracao.filter((d) => d.status !== 'Concluída');
+  const demandasCoracaoConcluidas = demandasCoracao.filter((d) => d.status === 'Concluída');
+  const demandasCoracaoOrdenadas = [...demandasCoracaoPendentes, ...demandasCoracaoConcluidas];
 
-      if (formPatrimonio.id) {
-        setPatrimonio(patrimonio.map((p) => (p.id === id ? item : p)));
-      } else {
-        setPatrimonio([...patrimonio, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Patrimônio', 'Patrimônio', `Item: ${item.nome}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar patrimônio: ${err.message || err}`);
-    }
-  };
+  const listaAutoresProducoes = Array.from(
+    new Set([
+      ...producoes.map((p) => p.autor_principal).filter(Boolean),
+      ...producoes.flatMap((p) => p.coautores ? p.coautores.split(',').map((c) => c.trim()) : []).filter(Boolean),
+    ])
+  );
 
-  const salvarMarketing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = formMarketing.id || crypto.randomUUID();
-    const item: MarketingItem = {
-      id,
-      titulo: formMarketing.titulo || '',
-      canal: formMarketing.canal || 'Instagram',
-      responsavel: formMarketing.responsavel || '',
-      data_prevista: formMarketing.data_prevista || new Date().toISOString().split('T')[0],
-      status: formMarketing.status || 'Ideia',
-      legenda: formMarketing.legenda || '',
-      artes: formMarketing.artes || [],
-    };
+  const producoesFiltradas = producoes.filter((p) => {
+    const atendeAutor =
+      filtroProducaoAutor === 'Todos' ||
+      p.autor_principal.toLowerCase().includes(filtroProducaoAutor.toLowerCase()) ||
+      (p.coautores && p.coautores.toLowerCase().includes(filtroProducaoAutor.toLowerCase()));
+    const atendeBusca = termoBusca
+      ? p.titulo.toLowerCase().includes(termoBusca.toLowerCase()) ||
+        p.evento_ou_revista.toLowerCase().includes(termoBusca.toLowerCase())
+      : true;
+    return atendeAutor && atendeBusca;
+  });
 
-    try {
-      const { error } = await supabase.from('marketing').upsert(item);
-      if (error) throw error;
+  const calcularResumoFaltas = () => {
+    const mapaFaltas: { [membroId: string]: { nome: string; faltas: number; justificadas: number; presencas: number } } = {};
+    membros.forEach((m) => {
+      mapaFaltas[m.id] = { nome: m.nome_completo, faltas: 0, justificadas: 0, presencas: 0 };
+    });
 
-      if (formMarketing.id) {
-        setMarketing(marketing.map((m) => (m.id === id ? item : m)));
-      } else {
-        setMarketing([...marketing, item]);
-      }
-      setModalAtivo(null);
-      registrarAuditoria('Salvar Marketing', 'Marketing', `Ação: ${item.titulo}`);
-    } catch (err: any) {
-      alert(`Erro ao salvar mídia: ${err.message || err}`);
-    }
+    reunioes.forEach((r) => {
+      r.presencas.forEach((p) => {
+        if (mapaFaltas[p.membro_id]) {
+          if (p.status === 'falta') mapaFaltas[p.membro_id].faltas += 1;
+          if (p.status === 'falta_justificada') mapaFaltas[p.membro_id].justificadas += 1;
+          if (p.status === 'presente') mapaFaltas[p.membro_id].presencas += 1;
+        }
+      });
+    });
+
+    return Object.values(mapaFaltas);
   };
 
   const membrosAtivos = membros.filter((m) => m.situacao === 'Ativo');
@@ -1421,6 +1511,7 @@ export default function Dashboard() {
     { key: 'colaboradores', label: '3. Colaboradores & Publicações' },
     { key: 'projetos', label: '4. Projetos de Pesquisa' },
     { key: 'demandas', label: '5. Gestão de Demandas' },
+    { key: 'coracao', label: '5.1 Demandas do Coração' },
     { key: 'pendencias', label: '6. Pendências e Prazos' },
     { key: 'producoes', label: '7. Produções Científicas' },
     { key: 'reunioes', label: '8. Encontros e Presença' },
@@ -1455,6 +1546,7 @@ export default function Dashboard() {
               { id: 'colaboradores', label: '3. Colaboradores & Publicações', icon: '🌐', count: colaboradores.length + colaboradoresFinanceiros.length },
               { id: 'projetos', label: '4. Projetos de Pesquisa', icon: '🔬', count: projetos.length },
               { id: 'demandas', label: '5. Gestão de Demandas', icon: '📋', count: demandasPendentes.length },
+              { id: 'coracao', label: 'Demandas do Coração', icon: '🫀', count: demandasCoracaoPendentes.length },
               { id: 'pendencias', label: '6. Pendências & Prazos', icon: '⚠️', count: demandasPendentes.length },
               { id: 'producoes', label: '7. Produções Científicas', icon: '📈', count: producoes.length },
               { id: 'reunioes', label: '8. Encontros & Presença', icon: '📅', count: reunioes.length },
@@ -1657,11 +1749,11 @@ export default function Dashboard() {
 
               {/* ABA 2: MEMBROS DO GETECC */}
               {moduloAtivo === 'membros' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
                     <div>
                       <h1 className="text-lg font-black text-slate-900">Membros do GETECC</h1>
-                      <p className="text-xs text-slate-900 font-bold mt-1">Ativos no topo. Registro completo de dados pessoais e histórico de ausências.</p>
+                      <p className="text-xs text-slate-900 font-bold mt-1">Cartões de perfis individuais e tabela/planilha unificada de cadastrados.</p>
                     </div>
                     {temPermissao('membros', 'editar') && (
                       <button onClick={() => { setFormMembro({ situacao: 'Ativo', categoria: 'Pesquisadores', historico_afastamentos: [] }); setModalAtivo('membro'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
@@ -1670,6 +1762,7 @@ export default function Dashboard() {
                     )}
                   </div>
 
+                  {/* CARTÕES DE PERFIL */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {membrosOrdenados.map((m) => (
                       <div key={m.id} className={`p-4 rounded-lg border shadow-sm space-y-3 ${m.situacao === 'Ativo' ? 'bg-white border-slate-300' : 'bg-slate-200 border-slate-400 opacity-90'}`}>
@@ -1689,21 +1782,7 @@ export default function Dashboard() {
                           <p><strong>Endereço:</strong> {m.endereco || 'Não informado'}</p>
                           <p><strong>Financiamento:</strong> {m.financiamento || 'Não se aplica'}</p>
                           <p><strong>Telefone / Instagram:</strong> {m.telefone || 'N/A'} | {m.instagram || 'N/A'}</p>
-                          <p><strong>ORCID / Lattes:</strong> <a href={m.orcid_link} target="_blank" rel="noreferrer" className="text-red-700 underline">ORCID</a> • <a href={m.lattes_link} target="_blank" rel="noreferrer" className="text-red-700 underline">Lattes</a></p>
                           <p><strong>Ingresso:</strong> {m.data_ingresso} {m.data_desligamento && `| Desligamento: ${m.data_desligamento}`}</p>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-300 space-y-1">
-                          <p className="text-[11px] font-black text-slate-900">Histórico de Ausências/Licenças ({m.historico_afastamentos?.length || 0}):</p>
-                          {m.historico_afastamentos && m.historico_afastamentos.length > 0 ? (
-                            m.historico_afastamentos.map((af) => (
-                              <div key={af.id} className="bg-amber-50 p-1.5 rounded border border-amber-200 text-[10px] font-bold text-amber-900">
-                                <strong>{af.tipo}:</strong> {af.data_inicio} até {af.data_fim} ({af.motivo})
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-[10px] text-slate-500 italic">Sem registros de ausência.</p>
-                          )}
                         </div>
 
                         <div className="flex justify-between items-center pt-2 border-t border-slate-300">
@@ -1718,6 +1797,78 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* PLANILHA / TABELA COMPLETA DE MEMBROS CADASTRADOS */}
+                  <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-4 mt-6">
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <div>
+                        <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                          <span>📊</span>
+                          <span>Planilha Geral de Membros Cadastrados</span>
+                        </h2>
+                        <p className="text-xs text-slate-700 font-bold">Visão tabulada com todos os dados dos integrantes.</p>
+                      </div>
+                      {/* CORREÇÃO DO BOTÃO: TEXTO PRETO PRESERVADO */}
+                      <button
+                        onClick={() => exportarParaExcel(membros, 'membros_getecc')}
+                        className="bg-emerald-100 hover:bg-emerald-200 text-slate-900 font-black text-xs px-3.5 py-2 rounded border border-emerald-300 shadow-sm flex items-center space-x-1"
+                      >
+                        <span>📥 Exportar Tabela Excel</span>
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded border border-slate-300">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
+                            <th className="p-3">Matrícula</th>
+                            <th className="p-3">Nome Completo</th>
+                            <th className="p-3">CPF</th>
+                            <th className="p-3">E-mail Institucional</th>
+                            <th className="p-3">Curso / Formação</th>
+                            <th className="p-3">Categoria / Cargo</th>
+                            <th className="p-3">Instituição</th>
+                            <th className="p-3">Data Ingresso</th>
+                            <th className="p-3">Situação</th>
+                            {temPermissao('membros', 'editar') && <th className="p-3 text-right">Ações</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-bold">
+                          {membrosOrdenados.length > 0 ? (
+                            membrosOrdenados.map((mb) => (
+                              <tr key={mb.id} className="hover:bg-slate-50">
+                                <td className="p-3 font-mono font-black text-slate-900">{mb.matricula}</td>
+                                <td className="p-3 font-black text-slate-900">{mb.nome_completo}</td>
+                                <td className="p-3 font-mono">{mb.cpf}</td>
+                                <td className="p-3">{mb.email_institucional}</td>
+                                <td className="p-3">{mb.curso_formacao}</td>
+                                <td className="p-3 text-red-700">{mb.categoria} - {mb.funcao_cargo}</td>
+                                <td className="p-3">{mb.instituicao}</td>
+                                <td className="p-3 font-mono">{mb.data_ingresso}</td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                                    mb.situacao === 'Ativo' ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'
+                                  }`}>
+                                    {mb.situacao}
+                                  </span>
+                                </td>
+                                {temPermissao('membros', 'editar') && (
+                                  <td className="p-3 text-right space-x-1">
+                                    <button onClick={() => { setFormMembro(mb); setModalAtivo('membro'); }} className="bg-slate-200 text-slate-900 font-black px-2 py-1 rounded border border-slate-400">Editar</button>
+                                    <button onClick={() => handleExcluir('membros', mb.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={10} className="p-4 text-center text-slate-500 italic">Nenhum membro cadastrado.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1882,6 +2033,21 @@ export default function Dashboard() {
                           <p><strong>Docentes:</strong> {p.docentes?.join(', ') || 'Nenhum'}</p>
                           <p><strong>Discentes:</strong> {p.discentes?.join(', ') || 'Nenhum'}</p>
                           <p><strong>Parecer CEP:</strong> {p.parecer_cep || 'N/A'} | <strong>CAEE CEP:</strong> {p.caee_cep || 'N/A'}</p>
+                          
+                          {/* CORREÇÃO: EXIBIÇÃO E LINK DE DESCARREGAMENTO DO PARECER CEP */}
+                          {p.parecer_cep_arquivo_dataurl && (
+                            <p className="text-xs font-bold text-slate-900 mt-1">
+                              <strong>Documento Parecer CEP:</strong>{' '}
+                              <a
+                                href={p.parecer_cep_arquivo_dataurl}
+                                download={p.parecer_cep_arquivo_nome || 'parecer_cep.pdf'}
+                                className="text-red-700 underline font-black hover:text-red-800"
+                              >
+                                📥 Descarregar {p.parecer_cep_arquivo_nome || 'Parecer CEP'}
+                              </a>
+                            </p>
+                          )}
+
                           <p><strong>Financiamento:</strong> {p.financiamento || 'Não se aplica'}</p>
                           <p className="text-slate-700 italic"><strong>Obs:</strong> {p.observacoes}</p>
                         </div>
@@ -1924,11 +2090,13 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
                     <div>
-                      <h1 className="text-lg font-black text-slate-900">Gestão de Demandas</h1>
-                      <p className="text-xs text-slate-900 font-bold mt-1">Pendentes no topo, concluídas fixadas na parte inferior. Filtre por status ou responsável.</p>
+                      <h1 className="text-lg font-black text-slate-900">Gestão de Demandas Gerais</h1>
+                      <p className="text-xs text-slate-900 font-bold mt-1">
+                        Registra automaticamente quem cadastrou e quem concluiu. Exibe alertas para prazos vencidos ou próximos do fim.
+                      </p>
                     </div>
                     {temPermissao('demandas', 'editar') && (
-                      <button onClick={() => { setFormDemanda({ prioridade: 'Média', status: 'Em andamento', anexos: [] }); setModalAtivo('demanda'); }} className="bg-red-100 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">+ Cadastrar Demanda</button>
+                      <button onClick={() => { setFormDemanda({ prioridade: 'Média', status: 'Em andamento', anexos: [], eh_coracao: false }); setModalAtivo('demanda'); }} className="bg-red-100 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">+ Cadastrar Demanda</button>
                     )}
                   </div>
 
@@ -1967,49 +2135,155 @@ export default function Dashboard() {
                       <thead>
                         <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
                           <th className="p-3">Código / Título</th>
+                          <th className="p-3">Cadastrado por</th>
                           <th className="p-3">Responsável</th>
-                          <th className="p-3">Prazo Final</th>
-                          <th className="p-3">Prioridade</th>
-                          <th className="p-3">Status</th>
+                          <th className="p-3">Prazo Final & Alerta</th>
+                          <th className="p-3">Status / Conclusão</th>
                           {temPermissao('demandas', 'editar') && <th className="p-3 text-right">Ações</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {demandasOrdenadas.length > 0 ? (
-                          demandasOrdenadas.map((d) => (
-                            <tr key={d.id} className={d.status === 'Concluída' ? 'bg-slate-100 opacity-75' : 'hover:bg-slate-50'}>
-                              <td className="p-3 font-bold text-slate-900">
-                                <span className="font-mono text-red-700 font-black">{d.codigo}</span> - {d.titulo}
-                                {d.descricao && <p className="text-[10px] text-slate-600 italic font-normal">{d.descricao}</p>}
-                              </td>
-                              <td className="p-3 font-bold text-slate-900">{d.responsavel_nome}</td>
-                              <td className="p-3 font-bold text-slate-900">{d.prazo_final}</td>
-                              <td className="p-3 font-black text-red-700">{d.prioridade}</td>
-                              <td className="p-3 font-bold text-slate-900">{d.status}</td>
-                              {temPermissao('demandas', 'editar') && (
-                                <td className="p-3 text-right space-x-1">
-                                  {d.status !== 'Concluída' && (
-                                    <button onClick={async () => {
-                                      const dAtualizada: Demanda = { ...d, status: 'Concluída' };
-                                      try {
-                                        const { error } = await supabase.from('demandas').upsert(dAtualizada);
-                                        if (error) throw error;
-                                        setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
-                                        registrarAuditoria('Conclusão Demanda', 'Demandas', `Demanda ${d.codigo} concluída`);
-                                      } catch (err: any) {
-                                        alert(`Erro ao atualizar demanda: ${err.message || err}`);
-                                      }
-                                    }} className="bg-emerald-600 text-white font-black px-2 py-1 rounded">✓ Marcar Concluída</button>
-                                  )}
-                                  <button onClick={() => { setFormDemanda(d); setModalAtivo('demanda'); }} className="bg-slate-200 text-slate-900 font-black px-2 py-1 rounded border border-slate-400">Editar</button>
-                                  <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
+                          demandasOrdenadas.map((d) => {
+                            const alerta = obterAlertaPrazoDemanda(d.prazo_final, d.status);
+                            return (
+                              <tr key={d.id} className={d.status === 'Concluída' ? 'bg-slate-100 opacity-75' : 'hover:bg-slate-50'}>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <span className="font-mono text-red-700 font-black">{d.codigo}</span> - {d.titulo}
+                                  {d.descricao && <p className="text-[10px] text-slate-600 italic font-normal">{d.descricao}</p>}
                                 </td>
-                              )}
-                            </tr>
-                          ))
+                                <td className="p-3 text-slate-700 font-bold">
+                                  👤 {d.cadastrado_por || 'Sistema'}
+                                </td>
+                                <td className="p-3 font-bold text-slate-900">{d.responsavel_nome}</td>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <p className="font-mono">{d.prazo_final}</p>
+                                  {alerta && (
+                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-black ${alerta.cor}`}>
+                                      {alerta.texto}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <p>{d.status}</p>
+                                  {d.status === 'Concluída' && d.concluido_por && (
+                                    <p className="text-[10px] text-emerald-800 font-black mt-0.5">✓ Concluído por: {d.concluido_por}</p>
+                                  )}
+                                </td>
+                                {temPermissao('demandas', 'editar') && (
+                                  <td className="p-3 text-right space-x-1">
+                                    {d.status !== 'Concluída' && (
+                                      <button
+                                        onClick={() => marcarDemandaConcluida(d)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2 py-1 rounded transition-colors"
+                                      >
+                                        ✓ Marcar Concluída
+                                      </button>
+                                    )}
+                                    <button onClick={() => { setFormDemanda(d); setModalAtivo('demanda'); }} className="bg-slate-200 text-slate-900 font-black px-2 py-1 rounded border border-slate-400">Editar</button>
+                                    <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td colSpan={6} className="p-4 text-center text-slate-900 font-bold italic">Nenhuma demanda encontrada.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA EXCLUSIVA: DEMANDAS DO CORAÇÃO */}
+              {moduloAtivo === 'coracao' && (
+                <div className="space-y-4">
+                  <div className="bg-red-50 p-5 rounded-lg border border-red-300 shadow-sm flex justify-between items-center">
+                    <div>
+                      <h1 className="text-lg font-black text-red-800 flex items-center space-x-2">
+                        <IconeCoracaoAnatomico />
+                        <span>Demandas Exclusivas do Núcleo Coração</span>
+                      </h1>
+                      <p className="text-xs text-red-900 font-bold mt-1">
+                        Área de acesso restrito ao Corpo Gestor. Registra autoria, responsável por conclusão e monitora prazos de vencimento.
+                      </p>
+                    </div>
+                    {temPermissao('coracao', 'editar') && (
+                      <button
+                        onClick={() => {
+                          setFormDemanda({ prioridade: 'Urgente', status: 'Em andamento', anexos: [], eh_coracao: true });
+                          setModalAtivo('demanda');
+                        }}
+                        className="bg-red-700 hover:bg-red-800 text-white font-black text-xs px-4 py-2 rounded shadow"
+                      >
+                        + Nova Demanda do Coração
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-red-100 text-red-900 font-black border-b border-red-300">
+                          <th className="p-3">Código / Título</th>
+                          <th className="p-3">Cadastrado por</th>
+                          <th className="p-3">Responsável</th>
+                          <th className="p-3">Prazo Final & Alerta</th>
+                          <th className="p-3">Status / Conclusão</th>
+                          {temPermissao('coracao', 'editar') && <th className="p-3 text-right">Ações</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {demandasCoracaoOrdenadas.length > 0 ? (
+                          demandasCoracaoOrdenadas.map((d) => {
+                            const alerta = obterAlertaPrazoDemanda(d.prazo_final, d.status);
+                            return (
+                              <tr key={d.id} className={d.status === 'Concluída' ? 'bg-slate-100 opacity-75' : 'hover:bg-red-50/50'}>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <span className="font-mono text-red-700 font-black">{d.codigo}</span> - {d.titulo}
+                                  {d.descricao && <p className="text-[10px] text-slate-600 italic font-normal">{d.descricao}</p>}
+                                </td>
+                                <td className="p-3 text-slate-700 font-bold">
+                                  👤 {d.cadastrado_por || 'Corpo Gestor'}
+                                </td>
+                                <td className="p-3 font-bold text-slate-900">{d.responsavel_nome}</td>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <p className="font-mono">{d.prazo_final}</p>
+                                  {alerta && (
+                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-black ${alerta.cor}`}>
+                                      {alerta.texto}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <p>{d.status}</p>
+                                  {d.status === 'Concluída' && d.concluido_por && (
+                                    <p className="text-[10px] text-emerald-800 font-black mt-0.5">✓ Concluído por: {d.concluido_por}</p>
+                                  )}
+                                </td>
+                                {temPermissao('coracao', 'editar') && (
+                                  <td className="p-3 text-right space-x-1">
+                                    {d.status !== 'Concluída' && (
+                                      <button
+                                        onClick={() => marcarDemandaConcluida(d)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2 py-1 rounded transition-colors"
+                                      >
+                                        ✓ Marcar Concluída
+                                      </button>
+                                    )}
+                                    <button onClick={() => { setFormDemanda(d); setModalAtivo('demanda'); }} className="bg-slate-200 text-slate-900 font-black px-2 py-1 rounded border border-slate-400">Editar</button>
+                                    <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="p-4 text-center text-slate-700 font-bold italic">Nenhuma demanda do Núcleo Coração cadastrada.</td>
                           </tr>
                         )}
                       </tbody>
@@ -2037,17 +2311,10 @@ export default function Dashboard() {
                           <p className="text-red-700">Responsável: {d.responsavel_nome} | Prazo: {d.prazo_final}</p>
                         </div>
                         {temPermissao('pendencias', 'editar') && (
-                          <button onClick={async () => {
-                            const dAtualizada: Demanda = { ...d, status: 'Concluída' };
-                            try {
-                              const { error } = await supabase.from('demandas').upsert(dAtualizada);
-                              if (error) throw error;
-                              setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
-                              registrarAuditoria('Conclusão Demanda', 'Pendências', `Demanda ${d.codigo} resolvida`);
-                            } catch (err: any) {
-                              alert(`Erro ao resolver demanda: ${err.message || err}`);
-                            }
-                          }} className="bg-emerald-600 text-white font-black px-3 py-1.5 rounded">
+                          <button
+                            onClick={() => marcarDemandaConcluida(d)}
+                            className="bg-emerald-100 hover:bg-emerald-200 text-slate-900 border border-emerald-400 font-black text-xs px-3.5 py-1.5 rounded shadow transition-colors"
+                          >
                             ✓ Resolver
                           </button>
                         )}
@@ -2063,7 +2330,7 @@ export default function Dashboard() {
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between md:items-center space-y-2 md:space-y-0">
                     <div>
                       <h1 className="text-lg font-black text-slate-900">Produções Científicas e Acadêmicas</h1>
-                      <p className="text-xs text-slate-900 font-bold mt-0.5">Separado em Artigos vs. Congressos com listagem por evento e upload XLS/CSV/Word.</p>
+                      <p className="text-xs text-slate-900 font-bold mt-0.5">Filtragem por autor e status como editoração, submissão e anais.</p>
                     </div>
                     {temPermissao('producoes', 'editar') && (
                       <div className="flex flex-wrap gap-2">
@@ -2080,6 +2347,20 @@ export default function Dashboard() {
                     )}
                   </div>
 
+                  <div className="bg-slate-50 p-3 rounded border border-slate-300 flex items-center space-x-3 text-xs font-bold">
+                    <span className="text-slate-900 font-black">🔍 Filtrar Produções por Autor / Coautor:</span>
+                    <select
+                      value={filtroProducaoAutor}
+                      onChange={(e) => setFiltroProducaoAutor(e.target.value)}
+                      className="p-2 border rounded font-bold text-slate-900 bg-white min-w-[280px]"
+                    >
+                      <option value="Todos">Todos os Autores</option>
+                      {listaAutoresProducoes.map((autor, idx) => (
+                        <option key={idx} value={autor}>{autor}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-3">
                     <div className="flex justify-between items-center border-b pb-2">
                       <h3 className="font-black text-slate-900 text-sm flex items-center space-x-2">
@@ -2087,7 +2368,7 @@ export default function Dashboard() {
                         <span>Lista de Artigos em Periódicos Científicos</span>
                       </h3>
                       <span className="bg-red-100 text-red-800 text-xs font-black px-2 py-0.5 rounded">
-                        Total: {producoes.filter((p) => p.categoria_producao === 'Periódico').length}
+                        Total: {producoesFiltradas.filter((p) => p.categoria_producao === 'Periódico').length}
                       </span>
                     </div>
 
@@ -2105,7 +2386,7 @@ export default function Dashboard() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
-                          {producoes.filter((p) => p.categoria_producao === 'Periódico').map((p) => (
+                          {producoesFiltradas.filter((p) => p.categoria_producao === 'Periódico').map((p) => (
                             <tr key={p.id} className="hover:bg-slate-50">
                               <td className="p-3 font-black text-slate-900 max-w-xs">{p.titulo}</td>
                               <td className="p-3 font-bold text-slate-900">{p.evento_ou_revista}</td>
@@ -2186,8 +2467,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-
-              {/* ABA 8: ENCONTROS CIENTÍFICOS */}
+{/* ABA 8: ENCONTROS CIENTÍFICOS */}
               {moduloAtivo === 'reunioes' && (
                 <div className="space-y-6">
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
@@ -2343,7 +2623,7 @@ export default function Dashboard() {
                               setFormMovimentacao({ tipo: 'Entrada', categoria: 'Outros', data: new Date().toISOString().split('T')[0] });
                               setModalAtivo('movimentacao');
                             }}
-                            className="bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs px-4 py-2.5 rounded shadow-sm flex items-center space-x-1"
+                            className="bg-emerald-100 hover:bg-emerald-200 text-slate-900 border border-emerald-400 font-black text-xs px-4 py-2.5 rounded shadow-sm flex items-center space-x-1"
                           >
                             <span>➕</span>
                             <span>Novo Lançamento de Caixa</span>
@@ -2768,46 +3048,117 @@ export default function Dashboard() {
               {moduloAtivo === 'relatorios' && (
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm space-y-4">
-                    <div className="flex justify-between items-center border-b pb-2">
+                    <div className="flex justify-between items-center border-b pb-3">
                       <div>
-                        <h1 className="text-lg font-black text-slate-900">Gerador de Relatórios & Base Acumulativa</h1>
-                        <p className="text-xs text-slate-900 font-bold mt-0.5">Suba arquivos em Word, Excel (.xls, .xlsx), CSV ou cole o texto.</p>
+                        <h1 className="text-lg font-black text-slate-900">Gerador de Relatórios & Exportação de Dados</h1>
+                        <p className="text-xs text-slate-900 font-bold mt-0.5">Relatórios segmentados com botão de exportação direta para planilha (.xlsx).</p>
                       </div>
-                      <span className="bg-emerald-100 text-emerald-900 font-black text-xs px-3 py-1 rounded border border-emerald-300">
-                        ✓ Base Acumulada: {baseImportadaEventos.length} registros
-                      </span>
+                      {/* CORREÇÃO DO BOTÃO: TEXTO PRETO PRESERVADO */}
+                      <button
+                        onClick={() => exportarParaExcel(producoes, 'relatorio_producoes_getecc')}
+                        className="bg-emerald-100 hover:bg-emerald-200 text-slate-900 font-black text-xs px-4 py-2 rounded border border-emerald-300 shadow flex items-center space-x-1"
+                      >
+                        <span>📥 Exportar Relatório em Planilha (.xlsx)</span>
+                      </button>
                     </div>
 
                     {temPermissao('relatorios', 'editar') && (
-                      <>
-                        <div className="bg-slate-50 p-3 rounded border border-slate-300 space-y-2">
-                          <label className="block font-black text-xs text-slate-900">📤 Selecionar Arquivo (.csv, .xls, .xlsx, .doc, .txt):</label>
-                          <input
-                            type="file"
-                            accept=".csv, .xls, .xlsx, .doc, .docx, .txt"
-                            onChange={(e) => handleProcessarArquivoEmMassa(e, 'relatorios')}
-                            className="w-full text-xs font-bold text-slate-900"
-                          />
-                        </div>
-
-                        <form onSubmit={handleProcessarBaseRelatorioCumulativa} className="space-y-3">
-                          <textarea
-                            rows={4}
-                            required
-                            value={textoCSVRelatorio}
-                            onChange={(e) => setTextoCSVRelatorio(e.target.value)}
-                            placeholder="Formato: Congresso ou Revista ; Autor Principal ; Título ; Coautores ; Ano"
-                            className="w-full border p-2 rounded text-xs font-mono font-bold text-slate-900"
-                          />
-                          <div className="flex justify-between items-center">
-                            <span className="text-[11px] text-slate-900 font-bold">Importação cumulativa mantendo todo o histórico.</span>
-                            <button type="submit" className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
-                              + Somar Dados
-                            </button>
-                          </div>
-                        </form>
-                      </>
+                      <div className="bg-slate-50 p-3 rounded border border-slate-300 space-y-2">
+                        <label className="block font-black text-xs text-slate-900">📤 Importar Arquivo Adicional (.csv, .xls, .xlsx):</label>
+                        <input
+                          type="file"
+                          accept=".csv, .xls, .xlsx"
+                          onChange={(e) => handleProcessarArquivoEmMassa(e, 'relatorios')}
+                          className="w-full text-xs font-bold text-slate-900"
+                        />
+                      </div>
                     )}
+                  </div>
+
+                  {/* SEÇÃO 1: RELATÓRIO DE ARTIGOS CIENTÍFICOS */}
+                  <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-3">
+                    <div className="flex justify-between items-center border-b pb-2">
+                      <h3 className="font-black text-slate-900 text-sm flex items-center space-x-2">
+                        <span>📰</span>
+                        <span>Relatório de Artigos em Periódicos</span>
+                      </h3>
+                      <button
+                        onClick={() => exportarParaExcel(producoes.filter((p) => p.categoria_producao === 'Periódico'), 'relatorio_artigos')}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-900 font-black text-xs px-3 py-1 rounded border border-slate-400"
+                      >
+                        Baixar Artigos (.xlsx)
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded border border-slate-300">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
+                            <th className="p-2.5">Título</th>
+                            <th className="p-2.5">Revista</th>
+                            <th className="p-2.5">Autor Principal</th>
+                            <th className="p-2.5">Ano</th>
+                            <th className="p-2.5">Qualis/DOI</th>
+                            <th className="p-2.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-bold">
+                          {producoes.filter((p) => p.categoria_producao === 'Periódico').map((art) => (
+                            <tr key={art.id} className="hover:bg-slate-50">
+                              <td className="p-2.5 font-black text-slate-900">{art.titulo}</td>
+                              <td className="p-2.5">{art.evento_ou_revista}</td>
+                              <td className="p-2.5">{art.autor_principal}</td>
+                              <td className="p-2.5 font-mono">{art.ano_publicacao}</td>
+                              <td className="p-2.5 font-mono">{art.qualis_doi}</td>
+                              <td className="p-2.5 text-red-700">{art.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* SEÇÃO 2: RELATÓRIO DE RESUMOS E CONGRESSOS */}
+                  <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-3">
+                    <div className="flex justify-between items-center border-b pb-2">
+                      <h3 className="font-black text-slate-900 text-sm flex items-center space-x-2">
+                        <span>🎤</span>
+                        <span>Relatório de Resumos em Congressos</span>
+                      </h3>
+                      <button
+                        onClick={() => exportarParaExcel(producoes.filter((p) => p.categoria_producao === 'Congresso'), 'relatorio_resumos')}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-900 font-black text-xs px-3 py-1 rounded border border-slate-400"
+                      >
+                        Baixar Resumos (.xlsx)
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded border border-slate-300">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
+                            <th className="p-2.5">Título do Resumo</th>
+                            <th className="p-2.5">Congresso / Evento</th>
+                            <th className="p-2.5">Autor Principal</th>
+                            <th className="p-2.5">Coautores</th>
+                            <th className="p-2.5">Ano</th>
+                            <th className="p-2.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-bold">
+                          {producoes.filter((p) => p.categoria_producao === 'Congresso').map((res) => (
+                            <tr key={res.id} className="hover:bg-slate-50">
+                              <td className="p-2.5 font-black text-slate-900">{res.titulo}</td>
+                              <td className="p-2.5">{res.evento_ou_revista}</td>
+                              <td className="p-2.5">{res.autor_principal}</td>
+                              <td className="p-2.5 text-slate-600">{res.coautores || 'Nenhum'}</td>
+                              <td className="p-2.5 font-mono">{res.ano_publicacao}</td>
+                              <td className="p-2.5 text-blue-800">{res.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm space-y-3">
@@ -3137,7 +3488,7 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
                 <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
-                <button type="submit" className="px-3 py-1.5 bg-emerald-700 text-white font-black rounded hover:bg-emerald-800">Confirmar Lançamento</button>
+                <button type="submit" className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-slate-900 border border-emerald-400 font-black rounded transition-colors">Confirmar Lançamento</button>
               </div>
             </form>
           </div>
@@ -3277,6 +3628,36 @@ export default function Dashboard() {
                   <label className="block mb-1">Parecer CEP:</label>
                   <input type="text" value={formProjeto.parecer_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, parecer_cep: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
+
+                {/* CORREÇÃO: CAMPO DE UPLOAD DO FICHEIRO DO PARECER CEP */}
+                <div>
+                  <label className="block mb-1 text-slate-900 font-black">📄 Anexar Ficheiro do Parecer CEP (PDF/Imagem):</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setFormProjeto({
+                            ...formProjeto,
+                            parecer_cep_arquivo_dataurl: reader.result as string,
+                            parecer_cep_arquivo_nome: file.name,
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full border p-1 rounded bg-slate-50 text-slate-900 font-bold"
+                  />
+                  {formProjeto.parecer_cep_arquivo_nome && (
+                    <p className="text-[11px] text-emerald-800 font-black mt-1">
+                      📎 Ficheiro Carregado: {formProjeto.parecer_cep_arquivo_nome}
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block mb-1">CAEE CEP:</label>
                   <input type="text" value={formProjeto.caee_cep || ''} onChange={(e) => setFormProjeto({ ...formProjeto, caee_cep: e.target.value })} className="w-full border p-2 rounded" />
@@ -3334,7 +3715,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg border border-slate-300 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <h2 className="text-base font-black text-slate-900 border-b pb-2">
-              {formDemanda.id ? 'Editar Demanda / Pendência' : 'Cadastrar Nova Demanda'}
+              {formDemanda.id ? 'Editar Demanda' : 'Cadastrar Nova Demanda'}
             </h2>
             <form onSubmit={salvarDemanda} className="space-y-3 text-xs font-bold text-slate-900">
               <div>
@@ -3351,6 +3732,7 @@ export default function Dashboard() {
                   <input type="date" required value={formDemanda.prazo_final || ''} onChange={(e) => setFormDemanda({ ...formDemanda, prazo_final: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block mb-1">Prioridade:</label>
@@ -3371,6 +3753,20 @@ export default function Dashboard() {
                   </select>
                 </div>
               </div>
+
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="chkCoracao"
+                  checked={formDemanda.eh_coracao || false}
+                  onChange={(e) => setFormDemanda({ ...formDemanda, eh_coracao: e.target.checked })}
+                  className="w-4 h-4 text-red-600 rounded"
+                />
+                <label htmlFor="chkCoracao" className="text-red-900 font-black cursor-pointer">
+                  Demanda Exclusiva do Núcleo Coração (Corpo Gestor)
+                </label>
+              </div>
+
               <div>
                 <label className="block mb-1">Descrição Detalhada:</label>
                 <textarea rows={3} value={formDemanda.descricao || ''} onChange={(e) => setFormDemanda({ ...formDemanda, descricao: e.target.value })} className="w-full border p-2 rounded" />
@@ -3433,10 +3829,14 @@ export default function Dashboard() {
                   <input type="text" value={formProducao.qualis_doi || ''} onChange={(e) => setFormProducao({ ...formProducao, qualis_doi: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block mb-1">Status:</label>
-                  <select value={formProducao.status || 'Publicado'} onChange={(e) => setFormProducao({ ...formProducao, status: e.target.value as any })} className="w-full border p-2 rounded">
+                  <label className="block mb-1">Status do Trabalho:</label>
+                  <select value={formProducao.status || 'Publicado'} onChange={(e) => setFormProducao({ ...formProducao, status: e.target.value as any })} className="w-full border p-2 rounded font-bold">
                     <option value="Pendente Submissão">Pendente Submissão</option>
+                    <option value="aguardando submissão">Aguardando Submissão</option>
                     <option value="Submetido">Submetido</option>
+                    <option value="em editoração">Em Editoração</option>
+                    <option value="aguardando anais">Aguardando Anais</option>
+                    <option value="anais publicados">Anais Publicados</option>
                     <option value="Publicado">Publicado</option>
                   </select>
                 </div>
@@ -3481,7 +3881,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* MODAL 12: IMPORTAÇÃO DE PRODUÇÕES EM MASSA (TXT / EXCEL / CSV) */}
+      {/* MODAL 12: IMPORTAÇÃO DE PRODUÇÕES EM MASSA */}
       {modalAtivo === 'cargaMassaProducao' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg border border-slate-300 max-w-2xl w-full p-6 space-y-4 shadow-xl">
