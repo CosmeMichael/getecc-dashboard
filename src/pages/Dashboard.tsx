@@ -36,7 +36,7 @@ export interface Membro {
   telefone?: string;
   curso_formacao: string;
   instituicao: string;
-  categoria: 'Coordenação' | 'Diretoria' | 'Pesquisadores' | 'Estudantes' | 'Egressos';
+  categoria: 'Gestão' | 'Apoio de Gestão' | 'Coordenação' | 'Diretoria' | 'Pesquisadores' | 'Estudantes' | 'Egressos';
   funcao_cargo: string;
   data_ingresso: string;
   data_desligamento?: string | null;
@@ -156,6 +156,18 @@ export interface ProducaoCientifica {
   status: 'Pendente Submissão' | 'Submetido' | 'Publicado' | 'em editoração' | 'aguardando submissão' | 'aguardando anais' | 'anais publicados';
 }
 
+export interface ConstrucaoPendente {
+  id: string;
+  titulo: string;
+  objetivo: string;
+  projeto_mae: string;
+  origem: string;
+  link_drive: string;
+  banco_dados: string;
+  status: 'Pendente' | 'Em desenvolvimento' | 'Concluída';
+  created_at?: string;
+}
+
 export interface MetaAnualProducao {
   ano: string;
   meta_artigos_produzidos: number;
@@ -202,7 +214,7 @@ export interface UsuarioSistema {
   id: string;
   nome_completo: string;
   email: string;
-  perfil_acesso: 'Administrador' | 'Coordenador' | 'Apoio Técnico' | 'Membro' | 'Consulta';
+  perfil_acesso: 'Administrador' | 'Gestão' | 'Coordenador' | 'Apoio Técnico' | 'Membro' | 'Consulta';
   situacao: 'Ativo' | 'Inativo';
   permissoes: { [abaKey: string]: PermissaoAba };
 }
@@ -234,12 +246,7 @@ const LogoGetecc = () => (
 );
 
 // ÍCONE DO CORAÇÃO ANATÔMICO (NÚCLEO CORAÇÃO)
-const IconeCoracaoAnatomico = () => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-red-600 inline-block">
-    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z M12 5.27c-.88-1.04-2.18-1.77-3.65-1.77-2.61 0-4.85 2.14-4.85 4.85 0 2.92 2.76 5.51 7.22 9.56l1.28 1.16 1.28-1.16c4.46-4.05 7.22-6.64 7.22-9.56 0-2.71-2.24-4.85-4.85-4.85-1.47 0-2.77.73-3.65 1.77z"/>
-    <path d="M12 6.5v4M10 8.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-  </svg>
-);
+const IconeCoracaoAnatomico = () => <span role="img" aria-label="coração anatômico" className="inline-block text-xl leading-none">🫀</span>;
 
 // CONVERSOR MONETÁRIO SEGURO
 const extrairValorNumerico = (texto: string | number | undefined): number => {
@@ -257,11 +264,12 @@ const NOMES_MESES = [
 
 export default function Dashboard() {
   const [moduloAtivo, setModuloAtivo] = useState<
-    'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'coracao' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'configuracoes'
+    'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'coracao' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'construcoes' | 'configuracoes'
   >('painel');
 
   // USUÁRIO LOGADO E VERIFICAÇÃO DE PERMISSÕES
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioSistema | null>(null);
+  const [identidadesUsuarioLogado, setIdentidadesUsuarioLogado] = useState<string[]>([]);
 
   // BASES DE DADOS SINCRONIZADAS COM O SUPABASE
   const [membros, setMembros] = useState<Membro[]>([]);
@@ -274,11 +282,14 @@ export default function Dashboard() {
   const [demandas, setDemandas] = useState<Demanda[]>([]);
   const [producoes, setProducoes] = useState<ProducaoCientifica[]>([]);
   const [metasAnuais, setMetasAnuais] = useState<MetaAnualProducao[]>([]);
+  const [anoMetaPainel, setAnoMetaPainel] = useState<string>(() => String(new Date().getFullYear()));
   const [reunioes, setReunioes] = useState<ReuniaoCientifica[]>([]);
   const [patrimonio, setPatrimonio] = useState<PatrimonioProduto[]>([]);
   const [marketing, setMarketing] = useState<MarketingItem[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([]);
   const [historicoAuditoria, setHistoricoAuditoria] = useState<ItemAuditoria[]>([]);
+  const [construcoesPendentes, setConstrucoesPendentes] = useState<ConstrucaoPendente[]>([]);
+  const [formConstrucao, setFormConstrucao] = useState<Partial<ConstrucaoPendente>>({ status: 'Pendente' });
 
   // BASE CUMULATIVA E IMPORTAÇÕES
   const [textoCSVRelatorio, setTextoCSVRelatorio] = useState('');
@@ -292,6 +303,12 @@ export default function Dashboard() {
   // FILTROS DO MÓDULO DE DEMANDAS & PRODUÇÕES
   const [filtroDemandaStatus, setFiltroDemandaStatus] = useState<string>('Todos');
   const [filtroDemandaResponsavel, setFiltroDemandaResponsavel] = useState<string>('Todos');
+  const [visaoDemandas, setVisaoDemandas] = useState<'lista' | 'calendario'>('lista');
+  const [somenteMinhasDemandas, setSomenteMinhasDemandas] = useState(false);
+  const [ordenacaoDemandas, setOrdenacaoDemandas] = useState<'prazo' | 'prioridade'>('prazo');
+  const [visaoCoracao, setVisaoCoracao] = useState<'lista' | 'calendario'>('lista');
+  const [mesCalendarioDemandas, setMesCalendarioDemandas] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [mesCalendarioCoracao, setMesCalendarioCoracao] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [filtroProducaoAutor, setFiltroProducaoAutor] = useState<string>('Todos');
 
   // FILTROS DO MÓDULO FINANCEIRO
@@ -433,21 +450,75 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    const carregarConstrucoes = async () => {
+      const { data, error } = await supabase.from('construcoes_pendentes').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.warn('A tabela construcoes_pendentes precisa ser criada no Supabase:', error.message);
+        return;
+      }
+      setConstrucoesPendentes((data || []) as ConstrucaoPendente[]);
+    };
+    carregarConstrucoes();
+    const canalConstrucoes = supabase.channel('construcoes-pendentes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'construcoes_pendentes' }, carregarConstrucoes)
+      .subscribe();
+    return () => { supabase.removeChannel(canalConstrucoes); };
+  }, []);
+
+  const excluirConstrucaoPendente = async (item: ConstrucaoPendente) => {
+    if (!temPermissao('construcoes', 'editar')) { alert('Você não possui permissão para excluir construções pendentes.'); return; }
+    if (!confirm(`Excluir a construção pendente “${item.titulo}”? Esta ação não poderá ser desfeita.`)) return;
+    const { error } = await supabase.from('construcoes_pendentes').delete().eq('id', item.id);
+    if (error) { alert(`Não foi possível excluir: ${error.message}`); return; }
+    setConstrucoesPendentes((prev) => prev.filter((x) => x.id !== item.id));
+    registrarAuditoria('Excluir construção pendente', 'Construções pendentes', item.titulo);
+  };
+
+  const salvarConstrucaoPendente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item: ConstrucaoPendente = {
+      id: formConstrucao.id || crypto.randomUUID(),
+      titulo: formConstrucao.titulo?.trim() || '',
+      objetivo: formConstrucao.objetivo?.trim() || '',
+      projeto_mae: formConstrucao.projeto_mae || '',
+      origem: formConstrucao.origem || '',
+      link_drive: formConstrucao.link_drive || '',
+      banco_dados: formConstrucao.banco_dados || '',
+      status: formConstrucao.status || 'Pendente'
+    };
+    if (!item.titulo || !item.objetivo) { alert('Informe o título e o objetivo da produção.'); return; }
+    const { error } = await supabase.from('construcoes_pendentes').upsert(item);
+    if (error) { alert(`Não foi possível salvar. Verifique se a tabela construcoes_pendentes foi criada no Supabase: ${error.message}`); return; }
+    setConstrucoesPendentes((prev) => [item, ...prev.filter((x) => x.id !== item.id)]);
+    setFormConstrucao({ status: 'Pendente' });
+    setModalAtivo(null);
+    registrarAuditoria('Salvar construção pendente', 'Construções pendentes', item.titulo);
+  };
+
+  useEffect(() => {
+    let ativo = true;
     const carregarUsuarioAtual = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        const encontrado = usuarios.find((u) => u.email === user.email);
-        setUsuarioLogado(encontrado || null);
-      }
+      if (!ativo) return;
+      const email = (user?.email || '').trim().toLocaleLowerCase('pt-BR');
+      const metadata = (user?.user_metadata || {}) as Record<string, unknown>;
+      const nomesMetadata = [metadata.nome_completo, metadata.full_name, metadata.name, metadata.nome, metadata.display_name, metadata.user_name, metadata.preferred_username]
+        .filter((v): v is string => typeof v === 'string' && !!v.trim());
+      const usuarioPorEmail = email ? usuarios.find((u) => (u.email || '').trim().toLocaleLowerCase('pt-BR') === email) : undefined;
+      const identidades = [usuarioPorEmail?.nome_completo, ...nomesMetadata, email, email.includes('@') ? email.split('@')[0] : '']
+        .filter((v): v is string => typeof v === 'string' && !!v.trim());
+      setIdentidadesUsuarioLogado(Array.from(new Set(identidades)));
+      setUsuarioLogado(usuarioPorEmail || null);
     };
     carregarUsuarioAtual();
+    return () => { ativo = false; };
   }, [usuarios]);
 
   const temPermissao = (abaKey: string, acao: 'visualizar' | 'editar'): boolean => {
     if (!usuarioLogado) return true;
-    if (usuarioLogado.perfil_acesso === 'Administrador') return true;
+    if (['Administrador', 'Gestão'].includes(usuarioLogado.perfil_acesso)) return true;
     if (abaKey === 'coracao') {
-      return ['Administrador', 'Coordenador', 'Diretoria'].includes(usuarioLogado.perfil_acesso);
+      return ['Administrador', 'Gestão', 'Coordenador'].includes(usuarioLogado.perfil_acesso);
     }
     return usuarioLogado.permissoes?.[abaKey]?.[acao] ?? false;
   };
@@ -496,6 +567,7 @@ export default function Dashboard() {
 
   const salvarDemanda = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!separarResponsaveis(formDemanda.responsavel_nome || '').length) { alert('Marque pelo menos um responsável pela demanda.'); return; }
     const id = formDemanda.id || crypto.randomUUID();
     const item: Demanda = {
       id,
@@ -503,7 +575,7 @@ export default function Dashboard() {
       titulo: formDemanda.titulo || '',
       descricao: formDemanda.descricao || '',
       responsavel_nome: formDemanda.responsavel_nome || '',
-      cadastrado_por: formDemanda.cadastrado_por || usuarioLogado?.nome_completo || 'Sistema',
+      cadastrado_por: formDemanda.cadastrado_por || usuarioLogado?.nome_completo || 'Cosme',
       concluido_por: formDemanda.status === 'Concluída' ? (formDemanda.concluido_por || usuarioLogado?.nome_completo || 'Sistema') : undefined,
       eh_coracao: formDemanda.eh_coracao || false,
       prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
@@ -835,6 +907,15 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     } catch (err: any) {
       alert(`Erro ao salvar meta: ${err.message || err}`);
     }
+  };
+
+  const excluirMetaAnual = async (meta: MetaAnualProducao) => {
+    if (!temPermissao('producoes', 'editar')) { alert('Você não possui permissão para excluir metas.'); return; }
+    if (!confirm(`Excluir a meta anual de ${meta.ano}? Esta ação não poderá ser desfeita.`)) return;
+    const { error } = await supabase.from('metas_anuais').delete().eq('ano', meta.ano);
+    if (error) { alert(`Erro ao excluir meta: ${error.message}`); return; }
+    setMetasAnuais((prev) => prev.filter((m) => m.ano !== meta.ano));
+    registrarAuditoria('Excluir meta anual', 'Produções', `Meta do ano ${meta.ano} excluída`);
   };
 
   const salvarReuniao = async (e: React.FormEvent) => {
@@ -1404,7 +1485,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     return atendeTipo && atendeCategoria && atendeBusca && atendeData;
   });
 
-  const anoAtual = '2026';
+  const anoAtual = anoMetaPainel;
   const metaAtual = metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 };
 
   const artigosProduzidosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_publicacao || anoAtual) === anoAtual).length;
@@ -1437,32 +1518,65 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     return atendeEvento && atendeBusca;
   });
 
+  const normalizarNomeResponsavel = (nome: string) => (nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9@._-]+/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase('pt-BR');
+  const separarResponsaveis = (valor: string) => (valor || '').split(/[,;\n|]+/).map((n) => n.trim()).filter(Boolean);
+  const responsavelIncluiUsuario = (responsaveis: string, identidades: string[] = []) => {
+    const atribuicoes = separarResponsaveis(responsaveis).map(normalizarNomeResponsavel).filter(Boolean);
+    const textoAtribuicoes = ` ${normalizarNomeResponsavel(responsaveis)} `;
+    const nomesPossiveis = identidades.map(normalizarNomeResponsavel).filter((nome) => nome.length >= 3);
+    // Primeiro tenta correspondência exata por responsável; depois aceita o nome como parte de um campo legado
+    // que tenha sido salvo com função, e-mail ou separador diferente.
+    return nomesPossiveis.some((nome) => atribuicoes.includes(nome) || textoAtribuicoes.includes(` ${nome} `));
+  };
+
   const demandasGerais = demandas.filter((d) => !d.eh_coracao);
   const demandasCoracao = demandas.filter((d) => d.eh_coracao);
 
-  const listaResponsaveisDemandas = Array.from(
-    new Set(demandasGerais.map((d) => d.responsavel_nome).filter(Boolean))
-  );
+  const listaResponsaveisDemandas = Array.from(new Set([
+    'Cosme',
+    ...usuarios.filter((u) => u.situacao === 'Ativo').map((u) => u.nome_completo),
+    ...demandas.flatMap((d) => (d.responsavel_nome || '').split(',').map((n) => n.trim()))
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const demandasFiltradas = demandasGerais.filter((d) => {
     const atendeStatus = filtroDemandaStatus === 'Todos' || d.status === filtroDemandaStatus;
-    const atendeResponsavel = filtroDemandaResponsavel === 'Todos' || d.responsavel_nome === filtroDemandaResponsavel;
+    const nomesResp = (d.responsavel_nome || '').split(',').map((n) => n.trim());
+    const atendeResponsavel = filtroDemandaResponsavel === 'Todos' || nomesResp.some((n) => normalizarNomeResponsavel(n) === normalizarNomeResponsavel(filtroDemandaResponsavel));
+    const atendeMinha = !somenteMinhasDemandas || responsavelIncluiUsuario(d.responsavel_nome || '', [usuarioLogado?.nome_completo || '', ...identidadesUsuarioLogado].filter(Boolean));
     const atendeBusca = termoBusca
       ? d.titulo.toLowerCase().includes(termoBusca.toLowerCase()) ||
         d.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
         d.descricao.toLowerCase().includes(termoBusca.toLowerCase())
       : true;
 
-    return atendeStatus && atendeResponsavel && atendeBusca;
+    return atendeStatus && atendeResponsavel && atendeMinha && atendeBusca;
   });
 
   const demandasPendentes = demandasFiltradas.filter((d) => d.status !== 'Concluída');
   const demandasConcluidas = demandasFiltradas.filter((d) => d.status === 'Concluída');
-  const demandasOrdenadas = [...demandasPendentes, ...demandasConcluidas];
+  const pesoPrioridade: Record<string, number> = { 'Urgente': 0, 'Alta': 1, 'Média': 2, 'Baixa': 3 };
+  const ordenarDemandas = (lista: Demanda[]) => [...lista].sort((a, b) => ordenacaoDemandas === 'prioridade' ? (pesoPrioridade[a.prioridade] ?? 9) - (pesoPrioridade[b.prioridade] ?? 9) || a.prazo_final.localeCompare(b.prazo_final) : a.prazo_final.localeCompare(b.prazo_final) || (pesoPrioridade[a.prioridade] ?? 9) - (pesoPrioridade[b.prioridade] ?? 9));
+  const demandasOrdenadas = [...ordenarDemandas(demandasPendentes), ...ordenarDemandas(demandasConcluidas)];
 
-  const demandasCoracaoPendentes = demandasCoracao.filter((d) => d.status !== 'Concluída');
-  const demandasCoracaoConcluidas = demandasCoracao.filter((d) => d.status === 'Concluída');
-  const demandasCoracaoOrdenadas = [...demandasCoracaoPendentes, ...demandasCoracaoConcluidas];
+  const demandasCoracaoFiltradas = demandasCoracao.filter((d) => {
+    const nomes = (d.responsavel_nome || '').split(',').map((n) => n.trim());
+    const respOk = filtroDemandaResponsavel === 'Todos' || nomes.some((n) => normalizarNomeResponsavel(n) === normalizarNomeResponsavel(filtroDemandaResponsavel));
+    const minhaOk = !somenteMinhasDemandas || responsavelIncluiUsuario(d.responsavel_nome || '', [usuarioLogado?.nome_completo || '', ...identidadesUsuarioLogado].filter(Boolean));
+    const buscaOk = !termoBusca || `${d.titulo} ${d.codigo} ${d.descricao}`.toLowerCase().includes(termoBusca.toLowerCase());
+    return respOk && minhaOk && buscaOk;
+  });
+  const demandasCoracaoPendentes = demandasCoracaoFiltradas.filter((d) => d.status !== 'Concluída');
+  const demandasCoracaoConcluidas = demandasCoracaoFiltradas.filter((d) => d.status === 'Concluída');
+  const demandasCoracaoOrdenadas = [...ordenarDemandas(demandasCoracaoPendentes), ...ordenarDemandas(demandasCoracaoConcluidas)];
+  const formatarDataCalendario = (data: Date) => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+  const obterDiasCalendario = (mes: Date) => {
+    const primeiroDia = new Date(mes.getFullYear(), mes.getMonth(), 1);
+    const deslocamentoSegunda = (primeiroDia.getDay() + 6) % 7;
+    return Array.from({ length: 42 }, (_, i) => new Date(mes.getFullYear(), mes.getMonth(), 1 - deslocamentoSegunda + i));
+  };
+  const diasCalendarioDemandas = obterDiasCalendario(mesCalendarioDemandas);
+  const diasCalendarioCoracao = obterDiasCalendario(mesCalendarioCoracao);
+  const nomeMesCalendario = (mes: Date) => mes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   const listaAutoresProducoes = Array.from(
     new Set([
@@ -1504,7 +1618,10 @@ const adicionarArtigoDerivadoNoProjeto = () => {
 
   const membrosAtivos = membros.filter((m) => m.situacao === 'Ativo');
   const membrosOutros = membros.filter((m) => m.situacao !== 'Ativo');
-  const membrosOrdenados = [...membrosAtivos, ...membrosOutros];
+  const pesoCategoriaMembro: Record<string, number> = { 'Gestão': 0, 'Apoio de Gestão': 1, 'Coordenação': 2, 'Diretoria': 3, 'Pesquisadores': 4, 'Estudantes': 5, 'Egressos': 6 };
+  const ehMembroGestao = (m: Membro) => /coordena|president|diretor|secret[aá]ri|tesoureir|gest[aã]o|vice|conselheir/i.test(`${m.funcao_cargo || ''} ${m.categoria || ''}`);
+  const ordenarMembrosPorGestao = (lista: Membro[]) => [...lista].sort((a, b) => Number(ehMembroGestao(b)) - Number(ehMembroGestao(a)) || (pesoCategoriaMembro[a.categoria] ?? 9) - (pesoCategoriaMembro[b.categoria] ?? 9) || a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'));
+  const membrosOrdenados = [...ordenarMembrosPorGestao(membrosAtivos), ...ordenarMembrosPorGestao(membrosOutros)];
 
   const abasDisponiveisChaves = [
     { key: 'membros', label: '2. Membros do GETECC' },
@@ -1520,6 +1637,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     { key: 'financeiro', label: '11. Financeiro (Caixa & Taxas)' },
     { key: 'usuarios', label: '12. Usuários e Permissões' },
     { key: 'relatorios', label: '13. Relatórios e Exportação' },
+    { key: 'construcoes', label: '14. Construções Pendentes' },
     { key: 'configuracoes', label: '14. Configurações' },
   ];
 
@@ -1555,6 +1673,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
               { id: 'financeiro', label: '11. Financeiro (Caixa & Taxas)', icon: '💰' },
               { id: 'usuarios', label: '12. Usuários & Permissões', icon: '🛡️', count: usuarios.length },
               { id: 'relatorios', label: '13. Relatórios & Exportação', icon: '📄' },
+              { id: 'construcoes', label: '14. Construções Pendentes', icon: '🧩', count: construcoesPendentes.filter((c) => c.status !== 'Concluída').length },
               { id: 'configuracoes', label: '14. Configurações', icon: '⚙️' },
             ]
               .filter((item) => item.id === 'painel' || temPermissao(item.id, 'visualizar'))
@@ -1592,6 +1711,17 @@ const adicionarArtigoDerivadoNoProjeto = () => {
         </div>
       </aside>
 
+      {/* Estilos de impressão: remove navegação e controles, imprime somente o conteúdo do módulo */}
+      <style>{`
+        @media print {
+          aside, header, button, input, select, textarea, .print\\:hidden { display: none !important; }
+          body, main, .min-h-screen { background: white !important; color: black !important; }
+          main { max-width: 100% !important; padding: 0 !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th, td { border: 1px solid #999 !important; color: black !important; }
+          section, .rounded-lg, .shadow-sm { box-shadow: none !important; break-inside: avoid; }
+        }
+      `}</style>
       {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white border-b border-slate-300 px-6 py-3 flex items-center justify-between shadow-sm">
@@ -1602,7 +1732,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
             onChange={(e) => setTermoBusca(e.target.value)}
             className="text-xs px-3.5 py-2 rounded border border-slate-300 bg-slate-50 text-slate-900 font-black w-full max-w-xs"
           />
-          <button onClick={() => window.print()} className="bg-slate-200 hover:bg-slate-300 text-slate-900 font-black text-xs px-4 py-2 rounded border border-slate-400">
+          <button onClick={() => window.print()} className="print:hidden bg-slate-200 hover:bg-slate-300 text-slate-900 font-black text-xs px-4 py-2 rounded border border-slate-400">
             🖨️ Imprimir Relatório
           </button>
         </header>
@@ -1624,11 +1754,14 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                       <h1 className="text-xl font-black text-slate-900">Painel Geral de Gestão • GETECC</h1>
                       <p className="text-xs text-slate-900 font-bold mt-1">Visão executiva e administrativa de membros, pesquisas e produções científicas.</p>
                     </div>
-                    {temPermissao('producoes', 'editar') && (
-                      <button onClick={() => { setFormMetaAnual(metaAtual); setModalAtivo('cadastrarMeta'); }} className="mt-2 sm:mt-0 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-3.5 py-2 rounded">
-                        ⚙️ Definir Meta Anual ({anoAtual})
-                      </button>
-                    )}
+                    <div className="mt-2 sm:mt-0 flex flex-wrap items-center gap-2">
+                      <label className="text-xs font-black text-slate-800">Ano do painel:
+                        <select value={anoMetaPainel} onChange={(e) => setAnoMetaPainel(e.target.value)} className="ml-2 border border-slate-300 rounded px-2 py-2 bg-white text-slate-900">
+                          {Array.from(new Set([...metasAnuais.map((m) => m.ano), ...Array.from({length: 5}, (_, i) => String(new Date().getFullYear() - 1 + i))])).sort().map((ano) => <option key={ano} value={ano}>{ano}</option>)}
+                        </select>
+                      </label>
+                      {temPermissao('producoes', 'editar') && <button onClick={() => { setFormMetaAnual(metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 }); setModalAtivo('cadastrarMeta'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-3.5 py-2 rounded">⚙️ Definir Meta Anual ({anoAtual})</button>}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1745,6 +1878,47 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* GRÁFICOS HISTÓRICOS DO PAINEL */}
+              {moduloAtivo === 'painel' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
+                    <h3 className="font-black text-sm mb-3">Admissões de membros por ano</h3>
+                    {Array.from(new Set(membros.map((m) => (m.data_ingresso || '').slice(0,4)).filter((a) => /^\d{4}$/.test(a)))).sort().map((ano) => {
+                      const total = membros.filter((m) => (m.data_ingresso || '').startsWith(ano)).length;
+                      const max = Math.max(1, ...Array.from(new Set(membros.map((m) => (m.data_ingresso || '').slice(0,4)))).map((a) => membros.filter((m) => (m.data_ingresso || '').startsWith(a)).length));
+                      return <div key={ano} className="grid grid-cols-[3rem_1fr_2rem] items-center gap-2 mb-2 text-xs"><span>{ano}</span><div className="h-4 bg-slate-100 rounded overflow-hidden"><div className="h-full bg-blue-600" style={{width: `${total/max*100}%`}} /></div><strong>{total}</strong></div>;
+                    })}
+                    {!membros.length && <p className="text-xs text-slate-500">Sem dados de membros.</p>}
+                  </section>
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
+                    <h3 className="font-black text-sm mb-3">Produções científicas por ano</h3>
+                    {Array.from(new Set(producoes.map((p) => p.ano_publicacao).filter(Boolean))).sort().map((ano) => {
+                      const total = producoes.filter((p) => p.ano_publicacao === ano).length;
+                      const publicadas = producoes.filter((p) => p.ano_publicacao === ano && ['Publicado','anais publicados'].includes(p.status)).length;
+                      const max = Math.max(1, ...Array.from(new Set(producoes.map((p) => p.ano_publicacao))).map((a) => producoes.filter((p) => p.ano_publicacao === a).length));
+                      return <div key={ano} className="mb-3 text-xs"><div className="flex justify-between"><span>{ano}</span><strong>{total} produções · {publicadas} publicadas</strong></div><div className="h-4 bg-slate-100 rounded overflow-hidden mt-1"><div className="h-full bg-emerald-600" style={{width: `${total/max*100}%`}} /></div></div>;
+                    })}
+                    {!producoes.length && <p className="text-xs text-slate-500">Sem dados de produção científica.</p>}
+                  </section>
+                </div>
+              )}
+
+              {moduloAtivo === 'painel' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Projetos por situação</h3>{(Object.entries(projetos.reduce((acc: Record<string, number>, p) => { const k = p.status || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([status,total]) => <div key={status} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={status}>{status}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className="h-full bg-violet-600" style={{width:`${total/Math.max(1,projetos.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!projetos.length && <p className="text-xs text-slate-500">Sem projetos cadastrados.</p>}</section>
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Demandas por situação</h3>{(Object.entries(demandas.reduce((acc: Record<string, number>, d) => { const k = d.status || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([status,total]) => <div key={status} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={status}>{status}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className={`h-full ${status === 'Concluída' ? 'bg-emerald-600' : 'bg-amber-500'}`} style={{width:`${total/Math.max(1,demandas.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!demandas.length && <p className="text-xs text-slate-500">Sem demandas cadastradas.</p>}</section>
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Demandas por prioridade</h3>{(['Urgente','Alta','Média','Baixa'] as const).map((prioridade) => { const total = demandas.filter((d) => d.prioridade === prioridade && d.status !== 'Concluída').length; const abertas = Math.max(1, demandas.filter((d) => d.status !== 'Concluída').length); const cor = prioridade === 'Urgente' ? 'bg-red-600' : prioridade === 'Alta' ? 'bg-orange-500' : prioridade === 'Média' ? 'bg-amber-500' : 'bg-sky-600'; return <div key={prioridade} className="grid grid-cols-[minmax(5rem,auto)_1fr_2rem] gap-2 items-center mb-3 text-xs"><span>{prioridade}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className={`h-full ${cor}`} style={{width:`${total/abertas*100}%`}} /></div><strong>{total}</strong></div>; })}{!demandas.filter((d) => d.status !== 'Concluída').length && <p className="text-xs text-slate-500">Não há demandas em aberto.</p>}</section>
+                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Produções por tipo</h3>{(Object.entries(producoes.reduce((acc: Record<string, number>, p) => { const k = p.categoria_producao || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([categoria,total]) => <div key={categoria} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={categoria}>{categoria}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className="h-full bg-indigo-600" style={{width:`${total/Math.max(1,producoes.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!producoes.length && <p className="text-xs text-slate-500">Sem produções cadastradas.</p>}</section>
+                </div>
+              )}
+
+              {moduloAtivo === 'painel' && metasAnuais.length > 0 && (
+                <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
+                  <div className="flex flex-wrap justify-between gap-2 items-center mb-3"><h3 className="font-black text-sm">Histórico comparativo de metas anuais</h3><button onClick={() => { setFormMetaAnual({ ano: String(Math.max(new Date().getFullYear(), ...metasAnuais.map((m) => Number(m.ano) || 0)) + (metasAnuais.some((m) => Number(m.ano) >= new Date().getFullYear()) ? 1 : 0)), meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 }); setModalAtivo('cadastrarMeta'); }} className="print:hidden border rounded px-3 py-2 text-xs font-black">+ Cadastrar meta de outro ano</button></div>
+                  <div className="overflow-x-auto"><table className="w-full text-xs border-collapse"><thead><tr className="bg-slate-100"><th className="border p-2 text-left">Ano</th><th className="border p-2">Artigos produzidos</th><th className="border p-2">Artigos publicados</th><th className="border p-2">Resumos publicados/aprovados</th><th className="border p-2">Ações</th></tr></thead><tbody>{[...metasAnuais].sort((a,b) => a.ano.localeCompare(b.ano)).map((m) => { const produzidos = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Periódico').length; const publicados = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Periódico' && ['Publicado','anais publicados'].includes(p.status)).length; const resumos = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Congresso' && ['Publicado','anais publicados','Aprovado'].includes(p.status)).length; const progresso = (valor: number, meta: number) => Math.min(100, Math.round(valor / Math.max(1, meta) * 100)); return <tr key={m.ano}><td className="border p-2 font-black">{m.ano}</td><td className="border p-2"><div className="font-bold text-center">{produzidos} / {m.meta_artigos_produzidos}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-amber-500" style={{width:`${progresso(produzidos,m.meta_artigos_produzidos)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(produzidos,m.meta_artigos_produzidos)}%</div></td><td className="border p-2"><div className="font-bold text-center">{publicados} / {m.meta_artigos_publicados}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-emerald-600" style={{width:`${progresso(publicados,m.meta_artigos_publicados)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(publicados,m.meta_artigos_publicados)}%</div></td><td className="border p-2"><div className="font-bold text-center">{resumos} / {m.meta_resumos}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-blue-600" style={{width:`${progresso(resumos,m.meta_resumos)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(resumos,m.meta_resumos)}%</div></td><td className="border p-2"><div className="flex flex-col gap-1"><button onClick={() => { setFormMetaAnual(m); setModalAtivo('cadastrarMeta'); }} className="print:hidden border rounded px-2 py-1 text-slate-800">Editar</button><button onClick={() => excluirMetaAnual(m)} className="print:hidden border border-red-300 text-red-700 rounded px-2 py-1">Excluir</button></div></td></tr>; })}</tbody></table></div>
+                </section>
               )}
 
               {/* ABA 2: MEMBROS DO GETECC */}
@@ -2100,6 +2274,16 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     )}
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => { const ativar = !somenteMinhasDemandas; setSomenteMinhasDemandas(ativar); setFiltroDemandaResponsavel('Todos'); if (ativar) { setFiltroDemandaStatus('Todos'); setTermoBusca(''); } }} className={`px-3 py-2 rounded border text-xs font-black ${somenteMinhasDemandas ? 'bg-red-700 text-white' : 'bg-white text-slate-800'}`}>🙋 {somenteMinhasDemandas ? 'Exibindo minhas demandas' : 'Demandas atribuídas a mim'}</button>
+                    <button onClick={() => setVisaoDemandas('lista')} className={`px-3 py-2 rounded border text-xs font-black ${visaoDemandas === 'lista' ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'} !text-slate-900`}>☷ Lista</button>
+                    <button onClick={() => setVisaoDemandas('calendario')} className={`px-3 py-2 rounded border text-xs font-black ${visaoDemandas === 'calendario' ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>📅 Calendário</button>
+                    <label className="text-xs font-black">Ordenar por:
+                      <select value={ordenacaoDemandas} onChange={(e) => setOrdenacaoDemandas(e.target.value as any)} className="ml-2 border rounded p-2">
+                        <option value="prazo">Vencimento</option><option value="prioridade">Prioridade</option>
+                      </select>
+                    </label>
+                  </div>
                   <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold">
                     <div>
                       <label className="block text-slate-900 mb-1 font-black">Filtrar por Status:</label>
@@ -2130,7 +2314,14 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+                  {visaoDemandas === 'calendario' ? (
+                    <div className="bg-white rounded-lg border border-slate-300 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black text-sm">Calendário mensal de demandas</h3><div className="flex items-center gap-2"><button type="button" onClick={() => setMesCalendarioDemandas(new Date(mesCalendarioDemandas.getFullYear(), mesCalendarioDemandas.getMonth() - 1, 1))} className="border rounded px-3 py-1 text-slate-900">‹</button><strong className="capitalize min-w-36 text-center">{nomeMesCalendario(mesCalendarioDemandas)}</strong><button type="button" onClick={() => setMesCalendarioDemandas(new Date(mesCalendarioDemandas.getFullYear(), mesCalendarioDemandas.getMonth() + 1, 1))} className="border rounded px-3 py-1 text-slate-900">›</button><button type="button" onClick={() => setMesCalendarioDemandas(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="border rounded px-2 py-1 text-xs text-slate-900">Hoje</button></div></div>
+                      <div className="grid grid-cols-7 border-t border-l border-slate-300">{['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((dia) => <div key={dia} className="p-2 text-center text-xs font-black bg-slate-100 border-r border-b border-slate-300">{dia}</div>)}
+                        {diasCalendarioDemandas.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasOrdenadas.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioDemandas.getMonth(); return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0,3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.status === 'Concluída' ? 'bg-emerald-100 text-emerald-900' : d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-amber-100 text-amber-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <p className="text-[10px] font-bold text-slate-600">+{itens.length-3} demandas</p>}</div></div>; })}
+                      </div><p className="text-[11px] text-slate-600">As demandas aparecem no dia do prazo final. Verde: concluída; vermelho: prioridade urgente; amarelo: demais pendências.</p>
+                    </div>
+                  ) : <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
@@ -2194,7 +2385,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                         )}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 
@@ -2224,7 +2415,27 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     )}
                   </div>
 
-                  <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => { const ativar = !somenteMinhasDemandas; setSomenteMinhasDemandas(ativar); setFiltroDemandaResponsavel('Todos'); if (ativar) { setFiltroDemandaStatus('Todos'); setTermoBusca(''); } }} className={`px-3 py-2 rounded border text-xs font-black ${somenteMinhasDemandas ? 'bg-red-700 text-white' : 'bg-white text-slate-800'}`}>🙋 Demandas atribuídas a mim</button>
+                    <button onClick={() => setVisaoCoracao('lista')} className={`px-3 py-2 rounded border text-xs font-black ${visaoCoracao === 'lista' ? 'bg-red-800 text-white' : 'bg-white text-slate-900'} ${visaoCoracao === 'lista' ? '!text-white' : '!text-slate-900'}`}>☷ Lista</button>
+                    <button onClick={() => setVisaoCoracao('calendario')} className={`px-3 py-2 rounded border text-xs font-black ${visaoCoracao === 'calendario' ? 'bg-red-800 text-white' : 'bg-white text-slate-900'}`}>📅 Calendário</button>
+                    <label className="text-xs font-black">Responsável:
+                      <select value={filtroDemandaResponsavel} onChange={(e) => setFiltroDemandaResponsavel(e.target.value)} className="ml-2 border rounded p-2">
+                        <option value="Todos">Todos</option>{listaResponsaveisDemandas.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs font-black">Ordenar:
+                      <select value={ordenacaoDemandas} onChange={(e) => setOrdenacaoDemandas(e.target.value as any)} className="ml-2 border rounded p-2"><option value="prazo">Vencimento</option><option value="prioridade">Prioridade</option></select>
+                    </label>
+                  </div>
+                  {visaoCoracao === 'calendario' ? (
+                    <div className="bg-white rounded-lg border border-slate-300 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black text-sm">Calendário mensal — Demandas do Coração</h3><div className="flex items-center gap-2"><button type="button" onClick={() => setMesCalendarioCoracao(new Date(mesCalendarioCoracao.getFullYear(), mesCalendarioCoracao.getMonth() - 1, 1))} className="border rounded px-3 py-1 text-slate-900">‹</button><strong className="capitalize min-w-36 text-center">{nomeMesCalendario(mesCalendarioCoracao)}</strong><button type="button" onClick={() => setMesCalendarioCoracao(new Date(mesCalendarioCoracao.getFullYear(), mesCalendarioCoracao.getMonth() + 1, 1))} className="border rounded px-3 py-1 text-slate-900">›</button><button type="button" onClick={() => setMesCalendarioCoracao(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="border rounded px-2 py-1 text-xs text-slate-900">Hoje</button></div></div>
+                      <div className="grid grid-cols-7 border-t border-l border-slate-300">{['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((dia) => <div key={dia} className="p-2 text-center text-xs font-black bg-red-50 border-r border-b border-slate-300">{dia}</div>)}
+                        {diasCalendarioCoracao.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasCoracaoOrdenadas.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioCoracao.getMonth(); return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0,3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.status === 'Concluída' ? 'bg-emerald-100 text-emerald-900' : d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-rose-100 text-rose-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <p className="text-[10px] font-bold text-slate-600">+{itens.length-3} demandas</p>}</div></div>; })}
+                      </div><p className="text-[11px] text-slate-600">As demandas aparecem no dia do prazo final. Verde: concluída; vermelho: prioridade urgente; rosa: demais pendências.</p>
+                    </div>
+                  ) : <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-red-100 text-red-900 font-black border-b border-red-300">
@@ -2288,7 +2499,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                         )}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 
@@ -3044,6 +3255,19 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 </div>
               )}
 
+              {/* ABA 14: CONSTRUÇÕES PENDENTES */}
+              {moduloAtivo === 'construcoes' && (
+                <div className="space-y-4">
+                  <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm flex flex-wrap justify-between gap-3 items-center">
+                    <div><h1 className="text-lg font-black">Construções Pendentes</h1><p className="text-xs text-slate-600">Banco de ideias para novos artigos, com projeto-mãe, objetivo, origem e links de trabalho.</p></div>
+                    {temPermissao('construcoes','editar') && <button onClick={() => { setFormConstrucao({ status: 'Pendente' }); setModalAtivo('construcaoPendente'); }} className="bg-red-700 text-white rounded px-4 py-2 text-xs font-black">+ Nova construção</button>}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(['Pendente','Em desenvolvimento','Concluída'] as const).map((status) => <div key={status} className="bg-white rounded-lg border border-slate-300 p-3"><h3 className="font-black text-sm mb-2">{status} ({construcoesPendentes.filter((c) => c.status === status).length})</h3>{construcoesPendentes.filter((c) => c.status === status).map((c) => <article key={c.id} className="border rounded p-3 mb-2 text-xs space-y-1"><p className="font-black">{c.titulo}</p><p><strong>Objetivo:</strong> {c.objetivo}</p><p><strong>Projeto-mãe:</strong> {c.projeto_mae || 'Não vinculado'}</p><p><strong>Origem:</strong> {c.origem || 'Não informada'}</p>{c.link_drive && <p><a className="text-blue-700 underline" href={c.link_drive} target="_blank" rel="noreferrer">Abrir pasta/arquivo no Drive</a></p>}{c.banco_dados && <p><a className="text-blue-700 underline" href={c.banco_dados} target="_blank" rel="noreferrer">Abrir banco de dados</a></p>}{temPermissao('construcoes','editar') && <div className="flex gap-2 pt-2"><button onClick={() => { setFormConstrucao(c); setModalAtivo('construcaoPendente'); }} className="border rounded px-2 py-1">Editar</button><button onClick={async () => { const atualizado = {...c, status: (c.status === 'Pendente' ? 'Em desenvolvimento' : c.status === 'Em desenvolvimento' ? 'Concluída' : 'Pendente') as ConstrucaoPendente['status']}; const {error} = await supabase.from('construcoes_pendentes').upsert(atualizado); if(error) alert(error.message); else setConstrucoesPendentes(prev => prev.map(x => x.id === c.id ? atualizado : x)); }} className="border rounded px-2 py-1">Avançar status</button><button onClick={() => excluirConstrucaoPendente(c)} className="border border-red-300 text-red-700 rounded px-2 py-1">Excluir</button></div>}</article>)}</div>)}
+                  </div>
+                </div>
+              )}
+
               {/* ABA 13: RELATÓRIOS E EXPORTAÇÃO */}
               {moduloAtivo === 'relatorios' && (
                 <div className="space-y-6">
@@ -3259,6 +3483,8 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 <div>
                   <label className="block mb-1">Categoria:</label>
                   <select value={formMembro.categoria || 'Pesquisadores'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded">
+                    <option value="Gestão">Gestão</option>
+                    <option value="Apoio de Gestão">Apoio de Gestão</option>
                     <option value="Coordenação">Coordenação</option>
                     <option value="Diretoria">Diretoria</option>
                     <option value="Pesquisadores">Pesquisadores</option>
@@ -3595,6 +3821,24 @@ const adicionarArtigoDerivadoNoProjeto = () => {
         </div>
       )}
 
+      {modalAtivo === 'construcaoPendente' && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-5 space-y-3 my-6">
+            <h2 className="font-black text-lg">{formConstrucao.id ? 'Editar construção pendente' : 'Cadastrar construção pendente'}</h2>
+            <form onSubmit={salvarConstrucaoPendente} className="space-y-3 text-xs font-bold">
+              <label className="block">Título do artigo/produção<input required value={formConstrucao.titulo || ''} onChange={e => setFormConstrucao({...formConstrucao,titulo:e.target.value})} className="w-full border rounded p-2 mt-1" /></label>
+              <label className="block">Objetivo<input required value={formConstrucao.objetivo || ''} onChange={e => setFormConstrucao({...formConstrucao,objetivo:e.target.value})} className="w-full border rounded p-2 mt-1" /></label>
+              <label className="block">Projeto-mãe<select value={formConstrucao.projeto_mae || ''} onChange={e => setFormConstrucao({...formConstrucao,projeto_mae:e.target.value})} className="w-full border rounded p-2 mt-1"><option value="">Selecione um projeto</option>{projetos.map(p => <option key={p.id} value={p.titulo}>{p.titulo}</option>)}</select></label>
+              <label className="block">Origem/como surgiu<input value={formConstrucao.origem || ''} onChange={e => setFormConstrucao({...formConstrucao,origem:e.target.value})} className="w-full border rounded p-2 mt-1" /></label>
+              <label className="block">Link do Drive<input type="url" value={formConstrucao.link_drive || ''} onChange={e => setFormConstrucao({...formConstrucao,link_drive:e.target.value})} className="w-full border rounded p-2 mt-1" placeholder="https://..." /></label>
+              <label className="block">Link do banco de dados<input type="url" value={formConstrucao.banco_dados || ''} onChange={e => setFormConstrucao({...formConstrucao,banco_dados:e.target.value})} className="w-full border rounded p-2 mt-1" placeholder="https://..." /></label>
+              <label className="block">Status<select value={formConstrucao.status || 'Pendente'} onChange={e => setFormConstrucao({...formConstrucao,status:e.target.value as ConstrucaoPendente['status']})} className="w-full border rounded p-2 mt-1"><option>Pendente</option><option>Em desenvolvimento</option><option>Concluída</option></select></label>
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setModalAtivo(null)} className="border rounded px-3 py-2">Cancelar</button><button type="submit" className="bg-red-700 text-white rounded px-4 py-2">Salvar</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 8: PROJETO DE PESQUISA & ARTIGOS DERIVADOS */}
       {modalAtivo === 'projeto' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -3631,7 +3875,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
 
                 {/* CORREÇÃO: CAMPO DE UPLOAD DO FICHEIRO DO PARECER CEP */}
                 <div>
-                  <label className="block mb-1 text-slate-900 font-black">📄 Anexar Ficheiro do Parecer CEP (PDF/Imagem):</label>
+                  <label className="block mb-1 text-slate-900 font-black">📄 Anexar Parecer CEP (opcional; PDF/Imagem):</label>
                   <input
                     type="file"
                     accept=".pdf,image/*"
@@ -3724,8 +3968,25 @@ const adicionarArtigoDerivadoNoProjeto = () => {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block mb-1">Responsável:</label>
-                  <input type="text" required value={formDemanda.responsavel_nome || ''} onChange={(e) => setFormDemanda({ ...formDemanda, responsavel_nome: e.target.value })} className="w-full border p-2 rounded" />
+                  <label className="block mb-1">Responsáveis (marque uma ou mais pessoas):</label>
+                  <div className="w-full border border-slate-300 rounded p-2 max-h-40 overflow-y-auto space-y-2 bg-white">
+                    {Array.from(new Set(['Cosme', ...usuarios.filter((u) => u.situacao === 'Ativo').map((u) => u.nome_completo), ...separarResponsaveis(formDemanda.responsavel_nome || '')])).filter(Boolean).sort((a,b) => a.localeCompare(b, 'pt-BR')).map((nome) => {
+                      const selecionados = separarResponsaveis(formDemanda.responsavel_nome || '');
+                      const marcado = selecionados.some((n) => normalizarNomeResponsavel(n) === normalizarNomeResponsavel(nome));
+                      return <label key={nome} className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                        <input type="checkbox" checked={marcado} onChange={(e) => {
+                          const atuais = separarResponsaveis(formDemanda.responsavel_nome || '');
+                          const novos = e.target.checked
+                            ? [...atuais.filter((n) => normalizarNomeResponsavel(n) !== normalizarNomeResponsavel(nome)), nome]
+                            : atuais.filter((n) => normalizarNomeResponsavel(n) !== normalizarNomeResponsavel(nome));
+                          setFormDemanda({ ...formDemanda, responsavel_nome: novos.join(', ') });
+                        }} className="h-4 w-4 accent-red-700" />
+                        <span>{nome}</span>
+                      </label>;
+                    })}
+                  </div>
+                  {!separarResponsaveis(formDemanda.responsavel_nome || '').length && <p className="text-[10px] text-red-600 mt-1">Marque pelo menos um responsável.</p>}
+                  <p className="text-[10px] text-slate-500 mt-1">Cada pessoa tem sua própria caixinha. Você pode marcar mais de um responsável.</p>
                 </div>
                 <div>
                   <label className="block mb-1">Prazo Final:</label>
@@ -4096,6 +4357,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                   <label className="block mb-1">Perfil de Acesso:</label>
                   <select value={formUsuario.perfil_acesso || 'Membro'} onChange={(e) => setFormUsuario({ ...formUsuario, perfil_acesso: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Administrador">Administrador (Acesso Total)</option>
+                    <option value="Gestão">Gestão (acesso a todas as abas, inclusive Coração)</option>
                     <option value="Coordenador">Coordenador</option>
                     <option value="Apoio Técnico">Apoio Técnico</option>
                     <option value="Membro">Membro</option>
