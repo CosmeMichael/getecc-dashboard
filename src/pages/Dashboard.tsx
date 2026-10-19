@@ -36,12 +36,30 @@ export interface Membro {
   telefone?: string;
   curso_formacao: string;
   instituicao: string;
-  categoria: 'Gestão' | 'Apoio de Gestão' | 'Coordenação' | 'Diretoria' | 'Pesquisadores' | 'Estudantes' | 'Egressos';
+  selecao_ingresso?: string;
+  atuacoes_egresso?: string[];
+  instituicao_egresso?: string;
+  observacoes_egresso?: string;
+  categoria: 'Gestão' | 'Apoio de Gestão' | 'Estudantes' | 'Egressos';
   funcao_cargo: string;
   data_ingresso: string;
   data_desligamento?: string | null;
   situacao: 'Ativo' | 'Desligado' | 'Em Afastamento/Licença';
   historico_afastamentos: RegistroAfastamento[];
+}
+
+export interface EgressoGETECC {
+  id: string;
+  nome_completo: string;
+  curso_formacao: string;
+  instituicao_formacao: string;
+  data_ingresso_getecc: string;
+  data_saida_getecc: string;
+  motivo_saida: string;
+  trajetorias: string[];
+  instituicao_atual: string;
+  cidade_uf_atual: string;
+  observacoes: string;
 }
 
 export interface ColaboradorExterno {
@@ -121,6 +139,7 @@ export interface ProjetoPesquisa {
   caee_cep: string;
   financiamento: string;
   observacoes: string;
+  is_nupex?: boolean;
   status: 'Em aberto' | 'Submetido' | 'Cadastrado' | 'Em execução' | 'Concluído';
   artigos_derivados: ArtigoDerivado[];
   anexos: AnexoArquivo[];
@@ -151,6 +170,7 @@ export interface ProducaoCientifica {
   evento_ou_revista: string;
   autor_principal: string;
   coautores: string;
+  ano_producao?: string;
   ano_publicacao: string;
   qualis_doi: string;
   status: 'Pendente Submissão' | 'Submetido' | 'Publicado' | 'em editoração' | 'aguardando submissão' | 'aguardando anais' | 'anais publicados';
@@ -262,9 +282,184 @@ const NOMES_MESES = [
   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
 ];
 
+type SegmentoGrafico = { label: string; valor: number; cor: string };
+type DadoGrafico = { label: string; valor: number; cor?: string };
+
+// Paleta institucional baseada diretamente nas cores presentes na identidade visual do GETECC.
+const PALETA_GETECC = ['#0072CE', '#DC2626', '#0F172A', '#4BA3DF', '#E57373', '#64748B', '#93C5FD'];
+const FUNDO_GETECC = ['#EAF4FB', '#FDECEC', '#F1F5F9', '#EEF7FC', '#FEF2F2', '#F8FAFC', '#EFF6FF'];
+
+const CardGrafico = ({ titulo, children }: { titulo: string; children?: React.ReactNode }) => (
+  <section className="flex min-w-0 min-h-[430px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_2px_14px_rgba(15,23,42,0.045)]">
+    <div className="mb-5 min-w-0 shrink-0">
+      <h3 className="break-words text-[15px] font-black leading-5 text-[#0F172A]">{titulo}</h3>
+    </div>
+    <div className="min-h-0 flex-1">{children}</div>
+  </section>
+);
+
+const GraficoCircular = ({ titulo, segmentos }: { titulo: string; segmentos: SegmentoGrafico[] }) => {
+  const total = segmentos.reduce((s, x) => s + Math.max(0, x.valor), 0);
+  let acumulado = 0;
+  const fatias = segmentos.filter((x) => x.valor > 0).map((x) => {
+    const inicio = acumulado;
+    acumulado += total ? (x.valor / total) * 100 : 0;
+    return `${x.cor} ${inicio}% ${acumulado}%`;
+  });
+  const fundo = fatias.length ? `conic-gradient(${fatias.join(', ')})` : 'conic-gradient(#E2E8F0 0% 100%)';
+  return (
+    <CardGrafico titulo={titulo}>
+      <div className="flex h-full min-h-[345px] flex-col items-center justify-center gap-8 xl:flex-row xl:gap-12">
+        <div className="relative h-56 w-56 shrink-0 rounded-full shadow-[0_4px_18px_rgba(15,23,42,0.06)]" style={{ background: fundo }} aria-hidden="true">
+          <div className="absolute inset-[22%] rounded-full bg-white" />
+        </div>
+        <div className="grid w-full min-w-0 max-w-xl grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {segmentos.map((x, i) => (
+            <div key={x.label} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3" style={{ backgroundColor: FUNDO_GETECC[i % FUNDO_GETECC.length] }}>
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: x.cor }} />
+              <span className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-4 text-slate-600">{x.label}</span>
+              <strong className="shrink-0 text-base tabular-nums text-[#0F172A]">{x.valor}</strong>
+            </div>
+          ))}
+          {!segmentos.some((x) => x.valor > 0) && <p className="col-span-full text-center text-xs text-slate-400">Sem dados registrados.</p>}
+        </div>
+      </div>
+    </CardGrafico>
+  );
+};
+
+const GraficoBarras = ({ titulo, dados, limite = 10 }: { titulo: string; dados: DadoGrafico[]; limite?: number }) => {
+  const exibidos = [...dados].sort((a, b) => b.valor - a.valor).slice(0, limite);
+  const max = Math.max(1, ...exibidos.map((d) => d.valor));
+  return (
+    <CardGrafico titulo={titulo}>
+      {exibidos.length ? (
+        <div className="flex h-full min-h-[345px] flex-col justify-center gap-5 overflow-hidden px-1">
+          {exibidos.map((d, i) => (
+            <div key={d.label} className="min-w-0">
+              <div className="mb-2 flex min-w-0 items-start justify-between gap-4">
+                <span className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-4 text-slate-600" title={d.label}>{d.label}</span>
+                <strong className="shrink-0 text-sm tabular-nums text-[#0F172A]">{d.valor}</strong>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${d.valor ? Math.max(5, (d.valor / max) * 100) : 0}%`, backgroundColor: d.cor || PALETA_GETECC[i % PALETA_GETECC.length] }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <p className="flex h-full min-h-[345px] items-center justify-center text-xs text-slate-400">Sem dados registrados.</p>}
+    </CardGrafico>
+  );
+};
+
+const GraficoColunas = ({ titulo, dados }: { titulo: string; dados: DadoGrafico[] }) => {
+  const max = Math.max(1, ...dados.map((d) => d.valor));
+  return (
+    <CardGrafico titulo={titulo}>
+      {dados.length ? (
+        <div className="flex h-full min-h-[345px] flex-col justify-end overflow-hidden px-2 pb-2">
+          <div className="flex h-64 items-end gap-3 border-b border-slate-200 px-1">
+            {dados.map((d, i) => (
+              <div key={d.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={`${d.label}: ${d.valor}`}>
+                <div className="mb-2 text-xs font-black tabular-nums text-[#0F172A]">{d.valor}</div>
+                <div className="flex h-52 w-full items-end justify-center">
+                  <div className="w-10 max-w-[70%] rounded-t-xl" style={{ height: `${d.valor ? Math.max(5, (d.valor / max) * 100) : 0}%`, backgroundColor: d.cor || PALETA_GETECC[i % PALETA_GETECC.length] }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-3 px-1">
+            {dados.map((d) => <span key={d.label} className="min-w-0 flex-1 break-words text-center text-[10px] font-semibold leading-4 text-slate-500" title={d.label}>{d.label}</span>)}
+          </div>
+        </div>
+      ) : <p className="flex h-full min-h-[345px] items-center justify-center text-xs text-slate-400">Sem dados registrados.</p>}
+    </CardGrafico>
+  );
+};
+
+const GraficoLinha = ({ titulo, dados }: { titulo: string; dados: DadoGrafico[] }) => {
+  const max = Math.max(1, ...dados.map((d) => d.valor));
+  const x = (i: number) => dados.length <= 1 ? 50 : 10 + i * (80 / (dados.length - 1));
+  const y = (v: number) => 88 - (v / max) * 64;
+  const pontos = dados.map((d, i) => `${x(i)},${y(d.valor)}`).join(' ');
+  return (
+    <CardGrafico titulo={titulo}>
+      {dados.length ? (
+        <div className="flex h-full min-h-[345px] flex-col justify-center">
+          <svg viewBox="0 0 100 100" className="h-64 w-full" role="img" aria-label={titulo} preserveAspectRatio="none">
+            <line x1="8" y1="24" x2="92" y2="24" stroke="#E2E8F0" />
+            <line x1="8" y1="56" x2="92" y2="56" stroke="#E2E8F0" />
+            <line x1="8" y1="88" x2="92" y2="88" stroke="#CBD5E1" />
+            <polyline points={pontos} fill="none" stroke={PALETA_GETECC[0]} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+            {dados.map((d, i) => <circle key={`${d.label}-${i}`} cx={x(i)} cy={y(d.valor)} r="2.8" fill={PALETA_GETECC[0]} stroke="white" strokeWidth="1" />)}
+          </svg>
+          <div className="mt-3 flex justify-between gap-2 text-[10px] font-black text-slate-500">
+            {dados.map((d) => <span key={d.label} className="min-w-0 flex-1 truncate text-center" title={d.label}>{d.label}</span>)}
+          </div>
+        </div>
+      ) : <p className="flex h-full min-h-[345px] items-center justify-center text-xs text-slate-400">Sem dados registrados.</p>}
+    </CardGrafico>
+  );
+};
+
+const GraficoLinhasComparativo = ({ titulo, dados }: { titulo: string; dados: { ano: string; produzidos: number; publicados: number }[] }) => {
+  const max = Math.max(1, ...dados.flatMap((d) => [d.produzidos, d.publicados]));
+  const x = (i: number) => dados.length <= 1 ? 50 : 10 + i * (80 / (dados.length - 1));
+  const y = (v: number) => 88 - (v / max) * 64;
+  const pontosProduzidos = dados.map((d, i) => `${x(i)},${y(d.produzidos)}`).join(' ');
+  const pontosPublicados = dados.map((d, i) => `${x(i)},${y(d.publicados)}`).join(' ');
+  return (
+    <CardGrafico titulo={titulo}>
+      {dados.length ? (
+        <div className="flex h-full min-h-[345px] flex-col justify-center">
+          <div className="mb-3 flex justify-center gap-6 text-[10px] font-bold text-slate-500">
+            <span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#0072CE]" />Produzidos</span>
+            <span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#DC2626]" />Publicados</span>
+          </div>
+          <svg viewBox="0 0 100 100" className="h-64 w-full" role="img" aria-label={titulo} preserveAspectRatio="none">
+            <line x1="8" y1="24" x2="92" y2="24" stroke="#E2E8F0" />
+            <line x1="8" y1="56" x2="92" y2="56" stroke="#E2E8F0" />
+            <line x1="8" y1="88" x2="92" y2="88" stroke="#CBD5E1" />
+            <polyline points={pontosProduzidos} fill="none" stroke="#0072CE" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={pontosPublicados} fill="none" stroke="#DC2626" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+            {dados.map((d, i) => <React.Fragment key={d.ano}>
+              <circle cx={x(i)} cy={y(d.produzidos)} r="2.8" fill="#0072CE" stroke="white" strokeWidth="1" />
+              <circle cx={x(i)} cy={y(d.publicados)} r="2.8" fill="#DC2626" stroke="white" strokeWidth="1" />
+            </React.Fragment>)}
+          </svg>
+          <div className="mt-3 flex justify-between gap-2 text-[10px] font-black text-slate-600">
+            {dados.map((d) => <span key={d.ano} className="min-w-0 flex-1 text-center">{d.ano}</span>)}
+          </div>
+        </div>
+      ) : <p className="flex h-full min-h-[345px] items-center justify-center text-xs text-slate-400">Sem dados registrados.</p>}
+    </CardGrafico>
+  );
+};
+
+const BlocoProjetos = ({ dados }: { dados: DadoGrafico[] }) => {
+  const max = Math.max(1, ...dados.map((d) => d.valor));
+  return (
+    <CardGrafico titulo="Projetos de pesquisa">
+      <div className="grid h-full min-h-[300px] grid-cols-1 content-center gap-4 sm:grid-cols-2">
+        {dados.map((d, i) => (
+          <div key={d.label} className="rounded-xl border border-slate-100 p-4" style={{ backgroundColor: FUNDO_GETECC[i % FUNDO_GETECC.length] }}>
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0 break-words text-[11px] font-bold leading-4 text-slate-600">{d.label}</span>
+              <strong className="shrink-0 text-2xl font-black tabular-nums text-slate-900">{d.valor}</strong>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/90">
+              <div className="h-full rounded-full" style={{ width: `${d.valor ? Math.max(7, d.valor / max * 100) : 0}%`, backgroundColor: d.cor || PALETA_GETECC[i % PALETA_GETECC.length] }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </CardGrafico>
+  );
+};
+
 export default function Dashboard() {
   const [moduloAtivo, setModuloAtivo] = useState<
-    'painel' | 'membros' | 'colaboradores' | 'projetos' | 'demandas' | 'coracao' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'construcoes' | 'configuracoes'
+    'painel' | 'membros' | 'egressos' | 'colaboradores' | 'projetos' | 'demandas' | 'coracao' | 'pendencias' | 'producoes' | 'reunioes' | 'patrimonio' | 'marketing' | 'financeiro' | 'usuarios' | 'relatorios' | 'construcoes' | 'configuracoes'
   >('painel');
 
   // USUÁRIO LOGADO E VERIFICAÇÃO DE PERMISSÕES
@@ -273,6 +468,7 @@ export default function Dashboard() {
 
   // BASES DE DADOS SINCRONIZADAS COM O SUPABASE
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [egressosGETECC, setEgressosGETECC] = useState<EgressoGETECC[]>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorExterno[]>([]);
   const [colaboradoresFinanceiros, setColaboradoresFinanceiros] = useState<ColaboradorFinanceiro[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<MovimentacaoFinanceira[]>([]);
@@ -309,6 +505,7 @@ export default function Dashboard() {
   const [visaoCoracao, setVisaoCoracao] = useState<'lista' | 'calendario'>('lista');
   const [mesCalendarioDemandas, setMesCalendarioDemandas] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [mesCalendarioCoracao, setMesCalendarioCoracao] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [diaCalendarioExpandido, setDiaCalendarioExpandido] = useState<string | null>(null);
   const [filtroProducaoAutor, setFiltroProducaoAutor] = useState<string>('Todos');
 
   // FILTROS DO MÓDULO FINANCEIRO
@@ -320,7 +517,8 @@ export default function Dashboard() {
   const [filtroFinTipo, setFiltroFinTipo] = useState('Todos');
 
   // FORMULÁRIOS DE CADASTRO E EDIÇÃO
-  const [formMembro, setFormMembro] = useState<Partial<Membro>>({ situacao: 'Ativo', categoria: 'Pesquisadores', historico_afastamentos: [] });
+  const [formMembro, setFormMembro] = useState<Partial<Membro>>({ situacao: 'Ativo', categoria: 'Estudantes', historico_afastamentos: [] });
+  const [formEgresso, setFormEgresso] = useState<Partial<EgressoGETECC>>({ trajetorias: [] });
   const [formAfastamento, setFormAfastamento] = useState<Partial<RegistroAfastamento>>({});
   const [formColaborador, setFormColaborador] = useState<Partial<ColaboradorExterno>>({ titulacao: 'Doutor' });
   const [formColaboradorFinanceiro, setFormColaboradorFinanceiro] = useState<Partial<ColaboradorFinanceiro>>({ titulacao: 'Doutor', status_publicacao: 'Em análise' });
@@ -365,7 +563,7 @@ export default function Dashboard() {
   const [formDiscentesTexto, setFormDiscentesTexto] = useState('');
   const [formArtigoDerivado, setFormArtigoDerivado] = useState<Partial<ArtigoDerivado>>({ status: 'em produção', anexos: [] });
   const [formDemanda, setFormDemanda] = useState<Partial<Demanda>>({ prioridade: 'Média', status: 'Em andamento', anexos: [], eh_coracao: false });
-  const [formProducao, setFormProducao] = useState<Partial<ProducaoCientifica>>({ categoria_producao: 'Periódico', status: 'Publicado', ano_publicacao: '2026' });
+  const [formProducao, setFormProducao] = useState<Partial<ProducaoCientifica>>({ categoria_producao: 'Periódico', status: 'Publicado', ano_producao: '2026', ano_publicacao: '2026' });
   const [formMetaAnual, setFormMetaAnual] = useState<Partial<MetaAnualProducao>>({ ano: '2026', meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 });
   const [textoCargaMassaProducao, setTextoCargaMassaProducao] = useState('');
   const [formReuniao, setFormReuniao] = useState<Partial<ReuniaoCientifica>>({ data: new Date().toISOString().split('T')[0] });
@@ -384,6 +582,7 @@ export default function Dashboard() {
         const [
           { data: uData },
           { data: mData },
+          { data: egData },
           { data: cData },
           { data: cfData },
           { data: movData },
@@ -400,6 +599,7 @@ export default function Dashboard() {
         ] = await Promise.all([
           supabase.from('usuarios').select('*'),
           supabase.from('membros').select('*'),
+          supabase.from('egressos_getecc').select('*'),
           supabase.from('colaboradores').select('*'),
           supabase.from('colaboradores_financeiros').select('*'),
           supabase.from('movimentacoes').select('*'),
@@ -417,6 +617,7 @@ export default function Dashboard() {
 
         if (uData) setUsuarios(uData);
         if (mData) setMembros(mData);
+        if (egData) setEgressosGETECC(egData);
         if (cData) setColaboradores(cData);
         if (cfData) setColaboradoresFinanceiros(cfData);
         if (movData) setMovimentacoes(movData);
@@ -505,10 +706,17 @@ export default function Dashboard() {
       const nomesMetadata = [metadata.nome_completo, metadata.full_name, metadata.name, metadata.nome, metadata.display_name, metadata.user_name, metadata.preferred_username]
         .filter((v): v is string => typeof v === 'string' && !!v.trim());
       const usuarioPorEmail = email ? usuarios.find((u) => (u.email || '').trim().toLocaleLowerCase('pt-BR') === email) : undefined;
-      const identidades = [usuarioPorEmail?.nome_completo, ...nomesMetadata, email, email.includes('@') ? email.split('@')[0] : '']
-        .filter((v): v is string => typeof v === 'string' && !!v.trim());
+      const usuarioPorNome = nomesMetadata.map((nome) => usuarios.find((u) => normalizarNomeResponsavel(u.nome_completo) === normalizarNomeResponsavel(nome))).find(Boolean);
+      const usuarioResolvido = usuarioPorEmail || usuarioPorNome;
+      const nomePerfil = usuarioResolvido?.nome_completo || nomesMetadata[0] || '';
+      const identidadesBase = [usuarioResolvido?.nome_completo, ...nomesMetadata, email, email.includes('@') ? email.split('@')[0] : ''];
+      // Compatibilidade legada estritamente limitada à conta identificada como Cosme.
+      // Nunca atribuir a identidade “Cosme/Sistema” a outros administradores ou usuários sem perfil resolvido.
+      const identidadeCosme = /cosme/i.test(`${nomePerfil} ${email} ${nomesMetadata.join(' ')}`);
+      if (identidadeCosme) identidadesBase.push('Cosme', 'Sistema', 'sistema');
+      const identidades = identidadesBase.filter((v): v is string => typeof v === 'string' && !!v.trim());
       setIdentidadesUsuarioLogado(Array.from(new Set(identidades)));
-      setUsuarioLogado(usuarioPorEmail || null);
+      setUsuarioLogado(usuarioResolvido || null);
     };
     carregarUsuarioAtual();
     return () => { ativo = false; };
@@ -558,9 +766,9 @@ export default function Dashboard() {
     const diffDias = Math.ceil(diffTempo / (1000 * 60 * 60 * 24));
 
     if (diffDias < 0) {
-      return { tipo: 'vencida', texto: `🚨 Vencida há ${Math.abs(diffDias)} dia(s)!`, cor: 'bg-red-600 text-white' };
+      return { tipo: 'vencida', texto: `🚨 Vencida há ${Math.abs(diffDias)} dia(s)!`, cor: 'bg-red-50 text-red-800 border border-red-200' };
     } else if (diffDias <= 3) {
-      return { tipo: 'urgente', texto: `⚠️ Vence em ${diffDias === 0 ? 'hoje' : `${diffDias} dia(s)`}!`, cor: 'bg-amber-500 text-white' };
+      return { tipo: 'urgente', texto: `⚠️ Vence em ${diffDias === 0 ? 'hoje' : `${diffDias} dia(s)`}!`, cor: 'bg-amber-100 text-amber-900 border border-amber-300' };
     }
     return null;
   };
@@ -616,6 +824,46 @@ export default function Dashboard() {
     }
   };
 
+  const salvarEgresso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const item: EgressoGETECC = {
+      id: formEgresso.id || crypto.randomUUID(),
+      nome_completo: formEgresso.nome_completo?.trim() || '',
+      curso_formacao: formEgresso.curso_formacao?.trim() || '',
+      instituicao_formacao: formEgresso.instituicao_formacao?.trim() || 'UNIFACISA',
+      data_ingresso_getecc: formEgresso.data_ingresso_getecc || '',
+      data_saida_getecc: formEgresso.data_saida_getecc || '',
+      motivo_saida: formEgresso.motivo_saida?.trim() || '',
+      trajetorias: formEgresso.trajetorias || [],
+      instituicao_atual: formEgresso.instituicao_atual?.trim() || '',
+      cidade_uf_atual: formEgresso.cidade_uf_atual?.trim() || '',
+      observacoes: formEgresso.observacoes?.trim() || '',
+    };
+    if (!item.nome_completo) { alert('Informe o nome completo do egresso.'); return; }
+    try {
+      const { error } = await supabase.from('egressos_getecc').upsert(item);
+      if (error) throw error;
+      setEgressosGETECC((prev) => formEgresso.id ? prev.map((x) => x.id === item.id ? item : x) : [item, ...prev]);
+      setFormEgresso({ trajetorias: [] });
+      setModalAtivo(null);
+      registrarAuditoria('Salvar Egresso GETECC', 'Egressos', `Egresso ${item.nome_completo} salvo`);
+    } catch (err: any) {
+      alert(`Erro ao salvar egresso: ${err.message || err}`);
+    }
+  };
+
+  const excluirEgresso = async (id: string) => {
+    if (!temPermissao('egressos', 'editar')) { alert('Você não possui permissão para excluir egressos.'); return; }
+    const item = egressosGETECC.find((x) => x.id === id);
+    if (!item || !confirm(`Excluir o egresso “${item.nome_completo}”?`)) return;
+    try {
+      const { error } = await supabase.from('egressos_getecc').delete().eq('id', id);
+      if (error) throw error;
+      setEgressosGETECC((prev) => prev.filter((x) => x.id !== id));
+      registrarAuditoria('Excluir Egresso GETECC', 'Egressos', `Egresso ${item.nome_completo} excluído`);
+    } catch (err: any) { alert(`Erro ao excluir egresso: ${err.message || err}`); }
+  };
+
   // CORREÇÃO: ENVIA NULL SE A DATA DE DESLIGAMENTO ESTIVER VAZIA
   const salvarMembro = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -636,7 +884,11 @@ export default function Dashboard() {
       telefone: formMembro.telefone || '',
       curso_formacao: formMembro.curso_formacao || '',
       instituicao: formMembro.instituicao || '',
-      categoria: formMembro.categoria || 'Pesquisadores',
+      selecao_ingresso: formMembro.selecao_ingresso || '',
+      atuacoes_egresso: formMembro.atuacoes_egresso || [],
+      instituicao_egresso: formMembro.instituicao_egresso || '',
+      observacoes_egresso: formMembro.observacoes_egresso || '',
+      categoria: formMembro.categoria || 'Estudantes',
       funcao_cargo: formMembro.funcao_cargo || '',
       data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
       data_desligamento: formMembro.data_desligamento && formMembro.data_desligamento.trim() !== '' 
@@ -806,6 +1058,7 @@ export default function Dashboard() {
       caee_cep: formProjeto.caee_cep || '',
       financiamento: formProjeto.financiamento || '',
       observacoes: formProjeto.observacoes || '',
+      is_nupex: !!formProjeto.is_nupex,
       status: formProjeto.status || 'Em aberto',
       artigos_derivados: formProjeto.artigos_derivados || [],
       anexos: formProjeto.anexos || [],
@@ -860,6 +1113,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
       evento_ou_revista: formProducao.evento_ou_revista || '',
       autor_principal: formProducao.autor_principal || '',
       coautores: formProducao.coautores || '',
+      ano_producao: (formProducao.categoria_producao || 'Periódico') === 'Congresso' ? (formProducao.ano_publicacao || '2026') : (formProducao.ano_producao || formProducao.ano_publicacao || '2026'),
       ano_publicacao: formProducao.ano_publicacao || '2026',
       qualis_doi: formProducao.qualis_doi || 'N/A',
       status: formProducao.status || 'Publicado',
@@ -1210,6 +1464,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
               evento_ou_revista: String(buscarValor(['periodico / nome do evento', 'periodico', 'revista', 'evento', 'congresso', 'nome do evento']) || 'N/A'),
               autor_principal: String(buscarValor(['autor', 'autor_principal', 'autor principal']) || 'GETECC'),
               coautores: String(buscarValor(['coautores', 'co-autores', 'coautor']) || ''),
+              ano_producao: String(buscarValor(['ano de producao', 'ano_producao', 'ano de elaboracao']) || buscarValor(['ano de publicacao', 'ano_publicacao', 'ano']) || '2026'),
               ano_publicacao: String(buscarValor(['ano de publicacao', 'ano_publicacao', 'ano']) || '2026'),
               qualis_doi: String(buscarValor(['qualis / doi', 'qualis_doi', 'qualis', 'doi']) || 'N/A'),
             };
@@ -1256,9 +1511,10 @@ const adicionarArtigoDerivadoNoProjeto = () => {
           evento_ou_revista: cols[3]?.trim() || 'Periódico/Congresso',
           autor_principal: cols[4]?.trim() || 'Autor GETECC',
           coautores: cols[5]?.trim() || '',
-          ano_publicacao: cols[6]?.trim() || '2026',
-          qualis_doi: cols[7]?.trim() || 'N/A',
-          status: (cols[8]?.trim() as any) || 'Publicado',
+          ano_producao: cols.length >= 10 ? (cols[6]?.trim() || '2026') : (cols[6]?.trim() || '2026'),
+          ano_publicacao: cols.length >= 10 ? (cols[7]?.trim() || cols[6]?.trim() || '2026') : (cols[6]?.trim() || '2026'),
+          qualis_doi: (cols.length >= 10 ? cols[8] : cols[7])?.trim() || 'N/A',
+          status: ((cols.length >= 10 ? cols[9] : cols[8])?.trim() as any) || 'Publicado',
         });
       }
     });
@@ -1485,16 +1741,83 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     return atendeTipo && atendeCategoria && atendeBusca && atendeData;
   });
 
+  const membrosAtivos = membros.filter((m) => m.situacao === 'Ativo');
+
   const anoAtual = anoMetaPainel;
   const metaAtual = metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 };
 
-  const artigosProduzidosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_publicacao || anoAtual) === anoAtual).length;
-  const artigosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
-  const resumosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Congresso' && p.status === 'Publicado' && (p.ano_publicacao || anoAtual) === anoAtual).length;
+  const artigosProduzidosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_producao || p.ano_publicacao || anoAtual) === anoAtual).length;
+  const artigosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Periódico' && ['Publicado', 'anais publicados'].includes(p.status) && (p.ano_publicacao || anoAtual) === anoAtual).length;
+  const resumosPublicadosAnoAtual = producoes.filter((p) => p.categoria_producao === 'Congresso' && ['Publicado', 'anais publicados', 'Aprovado'].includes(p.status) && (p.ano_publicacao || anoAtual) === anoAtual).length;
 
   const pctArtigosProduzidos = Math.min(Math.round((artigosProduzidosAnoAtual / (metaAtual.meta_artigos_produzidos || 1)) * 100), 100);
   const pctArtigosPublicados = Math.min(Math.round((artigosPublicadosAnoAtual / (metaAtual.meta_artigos_publicados || 1)) * 100), 100);
   const pctResumos = Math.min(Math.round((resumosPublicadosAnoAtual / (metaAtual.meta_resumos || 1)) * 100), 100);
+
+  const projetosNupex = projetos.filter((p) => !!p.is_nupex);
+  const projetosNaoNupex = projetos.filter((p) => !p.is_nupex);
+  const projetosEmCursoNupex = projetosNupex.filter((p) => p.status === 'Em execução').length;
+  const projetosFinalizadosNupex = projetosNupex.filter((p) => p.status === 'Concluído').length;
+  const projetosEmCursoOutros = projetosNaoNupex.filter((p) => p.status === 'Em execução').length;
+  const projetosFinalizadosOutros = projetosNaoNupex.filter((p) => p.status === 'Concluído').length;
+
+  const membrosAtivosPorCategoria = [
+    { label: 'Gestão', valor: membrosAtivos.filter((m) => m.categoria === 'Gestão').length, cor: PALETA_GETECC[0] },
+    { label: 'Apoio de Gestão', valor: membrosAtivos.filter((m) => m.categoria === 'Apoio de Gestão').length, cor: PALETA_GETECC[2] },
+    { label: 'Estudantes', valor: membrosAtivos.filter((m) => m.categoria === 'Estudantes').length, cor: PALETA_GETECC[1] },
+    { label: 'Egressos', valor: membrosAtivos.filter((m) => m.categoria === 'Egressos').length, cor: PALETA_GETECC[4] },
+  ];
+
+  const entradasPorAno = Array.from(new Set<string>(membrosAtivos.map((m) => String(m.data_ingresso || '').slice(0, 4)).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b))
+    .map((ano, i) => ({ label: ano, valor: membrosAtivos.filter((m) => String(m.data_ingresso || '').slice(0, 4) === ano).length, cor: PALETA_GETECC[i % PALETA_GETECC.length] }));
+
+  const membrosPorCurso = Array.from(new Set<string>(membrosAtivos.map((m) => (m.curso_formacao || 'Não informado').trim()).filter(Boolean)))
+    .map((curso) => ({ label: curso, valor: membrosAtivos.filter((m) => (m.curso_formacao || 'Não informado').trim() === curso).length }))
+    .sort((a, b) => b.valor - a.valor);
+
+  const entradasPorCursoSelecao = Array.from(new Set<string>(membros.map((m) => `${(m.curso_formacao || 'Não informado').trim()}|||${(m.selecao_ingresso || 'Não informada').trim()}`)))
+    .map((chave, i) => {
+      const [curso, selecao] = chave.split('|||');
+      return { label: `${curso} · ${selecao}`, valor: membros.filter((m) => `${(m.curso_formacao || 'Não informado').trim()}|||${(m.selecao_ingresso || 'Não informada').trim()}` === chave).length, cor: PALETA_GETECC[i % PALETA_GETECC.length] };
+    })
+    .sort((a, b) => b.valor - a.valor);
+
+  const colaboradoresPorAfiliacao = Array.from(new Set<string>(colaboradores.map((c) => (c.afiliacao || 'Não informada').trim()).filter(Boolean)))
+    .map((afiliacao) => ({ label: afiliacao, valor: colaboradores.filter((c) => (c.afiliacao || 'Não informada').trim() === afiliacao).length }))
+    .sort((a, b) => b.valor - a.valor);
+
+  const projetosNupexStatus = [
+    { label: 'NUPEX · Em curso', valor: projetosEmCursoNupex, cor: PALETA_GETECC[0] },
+    { label: 'NUPEX · Finalizados', valor: projetosFinalizadosNupex, cor: PALETA_GETECC[1] },
+    { label: 'Outros · Em curso', valor: projetosEmCursoOutros, cor: PALETA_GETECC[2] },
+    { label: 'Outros · Finalizados', valor: projetosFinalizadosOutros, cor: PALETA_GETECC[4] },
+  ];
+
+  const atuacoesEgressoOpcoes = ['Concurso público', 'Residência', 'Mestrado', 'Doutorado', 'Preceptoria de estágio', 'Assistência', 'Hospital HELP', 'Docência', 'Gestão', 'Empreendedorismo', 'Outro'];
+  const egressosPorAtuacao = atuacoesEgressoOpcoes.map((atuacao, i) => ({
+    label: atuacao,
+    valor: egressosGETECC.filter((e) => (e.trajetorias || []).includes(atuacao)).length,
+    cor: PALETA_GETECC[i % PALETA_GETECC.length],
+  }));
+  const egressosComAcompanhamento = egressosGETECC.filter((e) => (e.trajetorias || []).length > 0).length;
+  const egressosInstituicoes = new Set(egressosGETECC.map((e) => (e.instituicao_atual || '').trim()).filter(Boolean)).size;
+
+  const novosMembrosAno = membrosAtivos.filter((m) => String(m.data_ingresso || '').startsWith(anoAtual)).length;
+  const projetosEmCursoTotal = projetos.filter((p) => p.status === 'Em execução').length;
+  const projetosFinalizadosTotal = projetos.filter((p) => p.status === 'Concluído').length;
+  const producoesAnoAtualTotal = producoes.filter((p) => String(p.ano_producao || p.ano_publicacao || '') === anoAtual).length;
+  const artigosEmProducao = producoes.filter((p) => p.categoria_producao === 'Periódico' && !['Publicado', 'anais publicados'].includes(p.status)).length;
+  const producoesPorCategoria = [
+    { label: 'Artigos de periódicos', valor: producoes.filter((p) => p.categoria_producao === 'Periódico').length, cor: PALETA_GETECC[0] },
+    { label: 'Resumos de congressos', valor: producoes.filter((p) => p.categoria_producao === 'Congresso').length, cor: PALETA_GETECC[1] },
+  ];
+  const artigosPorStatus = [
+    { label: 'Publicados', valor: producoes.filter((p) => p.categoria_producao === 'Periódico' && ['Publicado', 'anais publicados'].includes(p.status)).length, cor: PALETA_GETECC[0] },
+    { label: 'Submetidos', valor: producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'Submetido').length, cor: PALETA_GETECC[3] },
+    { label: 'Em editoração', valor: producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'em editoração').length, cor: PALETA_GETECC[2] },
+    { label: 'Aguardando submissão', valor: producoes.filter((p) => p.categoria_producao === 'Periódico' && p.status === 'aguardando submissão').length, cor: PALETA_GETECC[4] },
+  ];
 
   const congressosAgrupados = producoes
     .filter((p) => p.categoria_producao === 'Congresso')
@@ -1533,7 +1856,6 @@ const adicionarArtigoDerivadoNoProjeto = () => {
   const demandasCoracao = demandas.filter((d) => d.eh_coracao);
 
   const listaResponsaveisDemandas = Array.from(new Set([
-    'Cosme',
     ...usuarios.filter((u) => u.situacao === 'Ativo').map((u) => u.nome_completo),
     ...demandas.flatMap((d) => (d.responsavel_nome || '').split(',').map((n) => n.trim()))
   ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -1616,15 +1938,14 @@ const adicionarArtigoDerivadoNoProjeto = () => {
     return Object.values(mapaFaltas);
   };
 
-  const membrosAtivos = membros.filter((m) => m.situacao === 'Ativo');
   const membrosOutros = membros.filter((m) => m.situacao !== 'Ativo');
-  const pesoCategoriaMembro: Record<string, number> = { 'Gestão': 0, 'Apoio de Gestão': 1, 'Coordenação': 2, 'Diretoria': 3, 'Pesquisadores': 4, 'Estudantes': 5, 'Egressos': 6 };
-  const ehMembroGestao = (m: Membro) => /coordena|president|diretor|secret[aá]ri|tesoureir|gest[aã]o|vice|conselheir/i.test(`${m.funcao_cargo || ''} ${m.categoria || ''}`);
-  const ordenarMembrosPorGestao = (lista: Membro[]) => [...lista].sort((a, b) => Number(ehMembroGestao(b)) - Number(ehMembroGestao(a)) || (pesoCategoriaMembro[a.categoria] ?? 9) - (pesoCategoriaMembro[b.categoria] ?? 9) || a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'));
+  const pesoCategoriaMembro: Record<string, number> = { 'Gestão': 0, 'Apoio de Gestão': 1, 'Estudantes': 2, 'Egressos': 3 };
+  const ordenarMembrosPorGestao = (lista: Membro[]) => [...lista].sort((a, b) => (pesoCategoriaMembro[a.categoria] ?? 9) - (pesoCategoriaMembro[b.categoria] ?? 9) || a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'));
   const membrosOrdenados = [...ordenarMembrosPorGestao(membrosAtivos), ...ordenarMembrosPorGestao(membrosOutros)];
 
   const abasDisponiveisChaves = [
     { key: 'membros', label: '2. Membros do GETECC' },
+    { key: 'egressos', label: '3. Acompanhamento de Egressos' },
     { key: 'colaboradores', label: '3. Colaboradores & Publicações' },
     { key: 'projetos', label: '4. Projetos de Pesquisa' },
     { key: 'demandas', label: '5. Gestão de Demandas' },
@@ -1661,20 +1982,21 @@ const adicionarArtigoDerivadoNoProjeto = () => {
             {[
               { id: 'painel', label: '1. Painel Inicial', icon: '📊' },
               { id: 'membros', label: '2. Membros do GETECC', icon: '👥', count: membrosAtivos.length },
-              { id: 'colaboradores', label: '3. Colaboradores & Publicações', icon: '🌐', count: colaboradores.length + colaboradoresFinanceiros.length },
-              { id: 'projetos', label: '4. Projetos de Pesquisa', icon: '🔬', count: projetos.length },
-              { id: 'demandas', label: '5. Gestão de Demandas', icon: '📋', count: demandasPendentes.length },
+              { id: 'egressos', label: '3. Acompanhamento de Egressos', icon: '🎓', count: egressosGETECC.length },
+              { id: 'colaboradores', label: '4. Colaboradores & Publicações', icon: '🌐', count: colaboradores.length + colaboradoresFinanceiros.length },
+              { id: 'projetos', label: '5. Projetos de Pesquisa', icon: '🔬', count: projetos.length },
+              { id: 'demandas', label: '6. Gestão de Demandas', icon: '📋', count: demandasPendentes.length },
               { id: 'coracao', label: 'Demandas do Coração', icon: '🫀', count: demandasCoracaoPendentes.length },
-              { id: 'pendencias', label: '6. Pendências & Prazos', icon: '⚠️', count: demandasPendentes.length },
-              { id: 'producoes', label: '7. Produções Científicas', icon: '📈', count: producoes.length },
-              { id: 'reunioes', label: '8. Encontros & Presença', icon: '📅', count: reunioes.length },
-              { id: 'patrimonio', label: '9. Patrimônio & Produtos', icon: '📦', count: patrimonio.length },
-              { id: 'marketing', label: '10. Gestão de Marketing', icon: '📣', count: marketing.length },
-              { id: 'financeiro', label: '11. Financeiro (Caixa & Taxas)', icon: '💰' },
-              { id: 'usuarios', label: '12. Usuários & Permissões', icon: '🛡️', count: usuarios.length },
-              { id: 'relatorios', label: '13. Relatórios & Exportação', icon: '📄' },
-              { id: 'construcoes', label: '14. Construções Pendentes', icon: '🧩', count: construcoesPendentes.filter((c) => c.status !== 'Concluída').length },
-              { id: 'configuracoes', label: '14. Configurações', icon: '⚙️' },
+              { id: 'pendencias', label: '7. Pendências & Prazos', icon: '⚠️', count: demandasPendentes.length },
+              { id: 'producoes', label: '8. Produções Científicas', icon: '📈', count: producoes.length },
+              { id: 'reunioes', label: '9. Encontros & Presença', icon: '📅', count: reunioes.length },
+              { id: 'patrimonio', label: '10. Patrimônio & Produtos', icon: '📦', count: patrimonio.length },
+              { id: 'marketing', label: '11. Gestão de Marketing', icon: '📣', count: marketing.length },
+              { id: 'financeiro', label: '12. Financeiro (Caixa & Taxas)', icon: '💰' },
+              { id: 'usuarios', label: '13. Usuários & Permissões', icon: '🛡️', count: usuarios.length },
+              { id: 'relatorios', label: '14. Relatórios & Exportação', icon: '📄' },
+              { id: 'construcoes', label: '15. Construções Pendentes', icon: '🧩', count: construcoesPendentes.filter((c) => c.status !== 'Concluída').length },
+              { id: 'configuracoes', label: '16. Configurações', icon: '⚙️' },
             ]
               .filter((item) => item.id === 'painel' || temPermissao(item.id, 'visualizar'))
               .map((item) => (
@@ -1748,180 +2070,189 @@ const adicionarArtigoDerivadoNoProjeto = () => {
             <>
               {/* ABA 1: PAINEL INICIAL */}
               {moduloAtivo === 'painel' && (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center">
-                    <div>
-                      <h1 className="text-xl font-black text-slate-900">Painel Geral de Gestão • GETECC</h1>
-                      <p className="text-xs text-slate-900 font-bold mt-1">Visão executiva e administrativa de membros, pesquisas e produções científicas.</p>
-                    </div>
-                    <div className="mt-2 sm:mt-0 flex flex-wrap items-center gap-2">
-                      <label className="text-xs font-black text-slate-800">Ano do painel:
-                        <select value={anoMetaPainel} onChange={(e) => setAnoMetaPainel(e.target.value)} className="ml-2 border border-slate-300 rounded px-2 py-2 bg-white text-slate-900">
-                          {Array.from(new Set([...metasAnuais.map((m) => m.ano), ...Array.from({length: 5}, (_, i) => String(new Date().getFullYear() - 1 + i))])).sort().map((ano) => <option key={ano} value={ano}>{ano}</option>)}
+                <div className="space-y-5 pb-8">
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_8px_rgba(15,23,42,0.035)]">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
+                      <div className="min-w-0 border-l-4 border-[#0072CE] pl-4">
+                        <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#0072CE]">GETECC · Relatório institucional</p>
+                        <h1 className="break-words text-2xl font-black tracking-tight text-slate-900">Visão geral</h1>
+                        <p className="mt-1 max-w-2xl break-words text-sm leading-5 text-slate-500">Indicadores de produção científica, composição da equipe, projetos e participação institucional.</p>
+                      </div>
+                      <label className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+                        <span>Ano de referência</span>
+                        <select value={anoMetaPainel} onChange={(e) => setAnoMetaPainel(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-extrabold text-slate-900 outline-none focus:border-[#0072CE] focus:ring-2 focus:ring-blue-100">
+                          {Array.from(new Set([String(new Date().getFullYear()), ...metasAnuais.map((m) => m.ano), ...producoes.flatMap((p) => [p.ano_producao, p.ano_publicacao]).filter((x): x is string => !!x)])).sort((a,b) => b.localeCompare(a)).map((ano) => <option key={ano} value={ano}>{ano}</option>)}
                         </select>
                       </label>
-                      {temPermissao('producoes', 'editar') && <button onClick={() => { setFormMetaAnual(metasAnuais.find((m) => m.ano === anoAtual) || { ano: anoAtual, meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 }); setModalAtivo('cadastrarMeta'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-3.5 py-2 rounded">⚙️ Definir Meta Anual ({anoAtual})</button>}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-4">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="font-black text-slate-900 text-xs flex items-center space-x-2">
-                          <span>📝</span>
-                          <span>Artigos Produzidos ({anoAtual})</span>
-                        </h3>
-                        <span className="bg-amber-100 text-amber-900 text-xs font-black px-2 py-0.5 rounded">
-                          {pctArtigosProduzidos}% Atingido
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="p-2 bg-slate-50 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Meta</p>
-                          <p className="text-lg font-black text-slate-900">{metaAtual.meta_artigos_produzidos}</p>
-                        </div>
-                        <div className="p-2 bg-amber-50 border border-amber-200 rounded">
-                          <p className="text-[9px] text-amber-800 font-bold uppercase">Produzidos</p>
-                          <p className="text-lg font-black text-amber-800">{artigosProduzidosAnoAtual}</p>
-                        </div>
-                        <div className="p-2 bg-slate-100 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Faltam</p>
-                          <p className="text-lg font-black text-slate-700">{Math.max(metaAtual.meta_artigos_produzidos - artigosProduzidosAnoAtual, 0)}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden p-0.5 border">
-                          <div className="bg-amber-600 h-full rounded-full transition-all duration-500" style={{ width: `${pctArtigosProduzidos}%` }} />
-                        </div>
-                      </div>
                     </div>
 
-                    <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-4">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="font-black text-slate-900 text-xs flex items-center space-x-2">
-                          <span>📰</span>
-                          <span>Artigos Publicados ({anoAtual})</span>
-                        </h3>
-                        <span className="bg-emerald-100 text-emerald-900 text-xs font-black px-2 py-0.5 rounded">
-                          {pctArtigosPublicados}% Atingido
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="p-2 bg-slate-50 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Meta</p>
-                          <p className="text-lg font-black text-slate-900">{metaAtual.meta_artigos_publicados}</p>
+                    {/* METAS ANUAIS — bloco principal do relatório */}
+                    <div className="grid grid-cols-1 gap-4 bg-slate-50/70 p-4 lg:grid-cols-3">
+                      {[
+                        { label: `Artigos Produzidos (${anoAtual})`, value: artigosProduzidosAnoAtual, meta: metaAtual.meta_artigos_produzidos, pct: pctArtigosProduzidos, done: 'PRODUZIDOS' },
+                        { label: `Artigos Publicados (${anoAtual})`, value: artigosPublicadosAnoAtual, meta: metaAtual.meta_artigos_publicados, pct: pctArtigosPublicados, done: 'PUBLICADOS' },
+                        { label: `Resumos Congressos (${anoAtual})`, value: resumosPublicadosAnoAtual, meta: metaAtual.meta_resumos, pct: pctResumos, done: 'APROVADOS' },
+                      ].map((m) => (
+                        <div key={m.label} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <span className="min-w-0 break-words text-sm font-extrabold leading-5 text-slate-800">{m.label}</span>
+                            <span className="shrink-0 rounded-lg bg-[#EAF4FB] px-2.5 py-1 text-[11px] font-black text-[#0072CE]">{m.pct}%</span>
+                          </div>
+                          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                            <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2 py-3"><div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Meta</div><div className="mt-1 text-xl font-black text-slate-900">{m.meta}</div></div>
+                            <div className="min-w-0 rounded-lg border border-blue-100 bg-[#EAF4FB] px-2 py-3"><div className="text-[10px] font-black uppercase tracking-wide text-[#0072CE]">{m.done}</div><div className="mt-1 text-xl font-black text-[#0072CE]">{m.value}</div></div>
+                            <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2 py-3"><div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Faltam</div><div className="mt-1 text-xl font-black text-slate-900">{Math.max(0, m.meta - m.value)}</div></div>
+                          </div>
+                          <div className="mt-4 h-3 w-full overflow-hidden rounded-full border border-slate-200 bg-[#E5E7EB]" aria-label={`${m.pct}% da meta atingida`}><div className="h-full rounded-full transition-all duration-500" style={{ width: `${m.pct}%`, backgroundColor: '#0072CE', minWidth: m.pct > 0 ? '6px' : '0px' }} /></div>
                         </div>
-                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded">
-                          <p className="text-[9px] text-emerald-800 font-bold uppercase">Publicados</p>
-                          <p className="text-lg font-black text-emerald-700">{artigosPublicadosAnoAtual}</p>
-                        </div>
-                        <div className="p-2 bg-slate-100 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Faltam</p>
-                          <p className="text-lg font-black text-slate-700">{Math.max(metaAtual.meta_artigos_publicados - artigosPublicadosAnoAtual, 0)}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden p-0.5 border">
-                          <div className="bg-emerald-600 h-full rounded-full transition-all duration-500" style={{ width: `${pctArtigosPublicados}%` }} />
-                        </div>
-                      </div>
+                      ))}
                     </div>
-
-                    <div className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-4">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="font-black text-slate-900 text-xs flex items-center space-x-2">
-                          <span>🎤</span>
-                          <span>Resumos Congressos ({anoAtual})</span>
-                        </h3>
-                        <span className="bg-blue-100 text-blue-900 text-xs font-black px-2 py-0.5 rounded">
-                          {pctResumos}% Atingido
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="p-2 bg-slate-50 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Meta</p>
-                          <p className="text-lg font-black text-slate-900">{metaAtual.meta_resumos}</p>
-                        </div>
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded">
-                          <p className="text-[9px] text-blue-800 font-bold uppercase">Aprovados</p>
-                          <p className="text-lg font-black text-blue-700">{resumosPublicadosAnoAtual}</p>
-                        </div>
-                        <div className="p-2 bg-slate-100 border rounded">
-                          <p className="text-[9px] text-slate-600 font-bold uppercase">Faltam</p>
-                          <p className="text-lg font-black text-slate-700">{Math.max(metaAtual.meta_resumos - resumosPublicadosAnoAtual, 0)}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden p-0.5 border">
-                          <div className="bg-blue-600 h-full rounded-full transition-all duration-500" style={{ width: `${pctResumos}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div onClick={() => temPermissao('membros', 'visualizar') && setModuloAtivo('membros')} className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm cursor-pointer hover:border-red-500">
-                      <p className="text-xs font-black text-slate-900 uppercase">Membros Ativos</p>
-                      <p className="text-3xl font-black text-slate-900 mt-1">{membrosAtivos.length}</p>
-                    </div>
-                    <div onClick={() => temPermissao('projetos', 'visualizar') && setModuloAtivo('projetos')} className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm cursor-pointer hover:border-red-500">
-                      <p className="text-xs font-black text-slate-900 uppercase">Projetos de Pesquisa</p>
-                      <p className="text-3xl font-black text-slate-900 mt-1">{projetos.length}</p>
-                    </div>
-                    <div onClick={() => temPermissao('demandas', 'visualizar') && setModuloAtivo('demandas')} className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm cursor-pointer hover:border-red-500">
-                      <p className="text-xs font-black text-red-700 uppercase">Demandas Pendentes</p>
-                      <p className="text-3xl font-black text-red-700 mt-1">{demandasPendentes.length}</p>
-                    </div>
-                    <div onClick={() => temPermissao('producoes', 'visualizar') && setModuloAtivo('producoes')} className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm cursor-pointer hover:border-red-500">
-                      <p className="text-xs font-black text-slate-900 uppercase">Total de Produções</p>
-                      <p className="text-3xl font-black text-slate-900 mt-1">{producoes.length}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* GRÁFICOS HISTÓRICOS DO PAINEL */}
-              {moduloAtivo === 'painel' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
-                    <h3 className="font-black text-sm mb-3">Admissões de membros por ano</h3>
-                    {Array.from(new Set(membros.map((m) => (m.data_ingresso || '').slice(0,4)).filter((a) => /^\d{4}$/.test(a)))).sort().map((ano) => {
-                      const total = membros.filter((m) => (m.data_ingresso || '').startsWith(ano)).length;
-                      const max = Math.max(1, ...Array.from(new Set(membros.map((m) => (m.data_ingresso || '').slice(0,4)))).map((a) => membros.filter((m) => (m.data_ingresso || '').startsWith(a)).length));
-                      return <div key={ano} className="grid grid-cols-[3rem_1fr_2rem] items-center gap-2 mb-2 text-xs"><span>{ano}</span><div className="h-4 bg-slate-100 rounded overflow-hidden"><div className="h-full bg-blue-600" style={{width: `${total/max*100}%`}} /></div><strong>{total}</strong></div>;
-                    })}
-                    {!membros.length && <p className="text-xs text-slate-500">Sem dados de membros.</p>}
                   </section>
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
-                    <h3 className="font-black text-sm mb-3">Produções científicas por ano</h3>
-                    {Array.from(new Set(producoes.map((p) => p.ano_publicacao).filter(Boolean))).sort().map((ano) => {
-                      const total = producoes.filter((p) => p.ano_publicacao === ano).length;
-                      const publicadas = producoes.filter((p) => p.ano_publicacao === ano && ['Publicado','anais publicados'].includes(p.status)).length;
-                      const max = Math.max(1, ...Array.from(new Set(producoes.map((p) => p.ano_publicacao))).map((a) => producoes.filter((p) => p.ano_publicacao === a).length));
-                      return <div key={ano} className="mb-3 text-xs"><div className="flex justify-between"><span>{ano}</span><strong>{total} produções · {publicadas} publicadas</strong></div><div className="h-4 bg-slate-100 rounded overflow-hidden mt-1"><div className="h-full bg-emerald-600" style={{width: `${total/max*100}%`}} /></div></div>;
-                    })}
-                    {!producoes.length && <p className="text-xs text-slate-500">Sem dados de produção científica.</p>}
+
+                  {/* INDICADORES INSTITUCIONAIS */}
+                  <section>
+                    <div className="mb-3 flex items-end justify-between gap-3 px-1">
+                      <div><h2 className="text-sm font-black text-slate-800">Indicadores institucionais</h2></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                      {[
+                        { label: 'Membros ativos', value: membrosAtivos.length, sub: `${novosMembrosAno} ingresso(s) em ${anoAtual}`, cor: 'text-[#0072CE]' },
+                        { label: 'Projetos de pesquisa', value: projetos.length, sub: `${projetosEmCursoTotal} em curso · ${projetosFinalizadosTotal} finalizados`, cor: 'text-[#0F172A]' },
+                        { label: 'Produções científicas', value: producoes.length, sub: `${producoesAnoAtualTotal} registro(s) em ${anoAtual}`, cor: 'text-[#0072CE]' },
+                        { label: 'Colaboradores externos', value: colaboradores.length, sub: `${new Set(colaboradores.map((c) => c.afiliacao).filter(Boolean)).size} instituição(ões)`, cor: 'text-[#0F766E]' },
+                        { label: 'Artigos em produção', value: artigosEmProducao, sub: 'não publicados', cor: 'text-[#DC2626]' },
+                      ].map((kpi) => (
+                        <div key={kpi.label} className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.03)]">
+                          <div className="break-words text-[10px] font-black uppercase leading-4 tracking-wider text-slate-400">{kpi.label}</div>
+                          <div className={`mt-1 text-3xl font-black tracking-tight ${kpi.cor}`}>{kpi.value}</div>
+                          <div className="mt-1 break-words text-[10px] font-semibold leading-4 text-slate-500">{kpi.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* PRODUÇÃO */}
+                  <section>
+                    <div className="mb-3 px-1"><h2 className="text-sm font-black text-slate-800">Produção científica</h2></div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <GraficoCircular titulo="Composição das produções" segmentos={producoesPorCategoria} />
+                      <GraficoLinha titulo="Evolução anual das produções" dados={Array.from(new Set<string>(producoes.map((p) => String(p.ano_producao || p.ano_publicacao || '')).filter(Boolean))).sort((a,b) => a.localeCompare(b)).slice(-7).map((ano) => ({ label: ano, valor: producoes.filter((p) => (p.ano_producao || p.ano_publicacao) === ano).length }))} />
+                      <GraficoBarras titulo="Artigos por situação" dados={artigosPorStatus} />
+                      <GraficoLinhasComparativo titulo="Artigos produzidos × publicados" dados={Array.from(new Set<string>(producoes.filter((p) => p.categoria_producao === 'Periódico').flatMap((p): string[] => [String(p.ano_producao || p.ano_publicacao || ''), String(p.ano_publicacao || '')]).filter(Boolean))).sort((a,b) => a.localeCompare(b)).slice(-6).map((ano) => ({
+                        ano,
+                        produzidos: producoes.filter((p) => p.categoria_producao === 'Periódico' && (p.ano_producao || p.ano_publicacao) === ano).length,
+                        publicados: producoes.filter((p) => p.categoria_producao === 'Periódico' && p.ano_publicacao === ano && ['Publicado','anais publicados'].includes(p.status)).length,
+                      }))} />
+                    </div>
+                  </section>
+
+                  {/* MEMBROS */}
+                  <section>
+                    <div className="mb-3 px-1"><h2 className="text-sm font-black text-slate-800">Composição e ingresso de membros</h2></div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <GraficoCircular titulo="Membros ativos por categoria" segmentos={membrosAtivosPorCategoria} />
+                      <GraficoColunas titulo="Entrada de membros ativos por ano" dados={entradasPorAno} />
+                      <GraficoBarras titulo="Membros ativos por curso" dados={membrosPorCurso} />
+                      <GraficoBarras titulo="Entrada por curso e seleção" dados={entradasPorCursoSelecao} />
+                    </div>
+                  </section>
+
+                  {/* PROJETOS E COLABORADORES */}
+                  <section>
+                    <div className="mb-3 px-1"><h2 className="text-sm font-black text-slate-800">Projetos e rede de colaboração</h2></div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <BlocoProjetos dados={projetosNupexStatus} />
+                      <GraficoBarras titulo="Colaboradores externos por afiliação" dados={colaboradoresPorAfiliacao} />
+                    </div>
+                  </section>
+
+                  {/* IMPACTO DOS EGRESSOS */}
+                  <section>
+                    <div className="mb-3 px-1"><h2 className="text-sm font-black text-slate-800">Impacto dos egressos do GETECC</h2></div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <GraficoBarras titulo="Trajetória atual dos egressos" dados={egressosPorAtuacao} limite={11} />
+                      <section className="flex min-w-0 min-h-[430px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_2px_14px_rgba(15,23,42,0.045)]">
+                        <h3 className="break-words text-[15px] font-black leading-5 text-[#0F172A]">Acompanhamento dos egressos</h3>
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                          <div className="min-w-0 rounded-xl border border-slate-100 bg-[#EAF4FB] p-4"><div className="break-words text-[10px] font-black uppercase leading-4 tracking-wide text-[#0072CE]">Egressos cadastrados</div><div className="mt-2 text-3xl font-black text-[#0F172A]">{egressosGETECC.length}</div></div>
+                          <div className="min-w-0 rounded-xl border border-slate-100 bg-[#FDECEC] p-4"><div className="break-words text-[10px] font-black uppercase leading-4 tracking-wide text-[#DC2626]">Com trajetória registrada</div><div className="mt-2 text-3xl font-black text-[#0F172A]">{egressosComAcompanhamento}</div></div>
+                          <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4"><div className="break-words text-[10px] font-black uppercase leading-4 tracking-wide text-slate-500">Instituições informadas</div><div className="mt-2 text-3xl font-black text-[#0F172A]">{egressosInstituicoes}</div></div>
+                          <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4"><div className="break-words text-[10px] font-black uppercase leading-4 tracking-wide text-slate-500">Vínculos registrados</div><div className="mt-2 text-3xl font-black text-[#0F172A]">{egressosPorAtuacao.reduce((s, x) => s + x.valor, 0)}</div></div>
+                        </div>
+                        <p className="mt-auto pt-6 break-words text-xs leading-5 text-slate-500">O indicador evidencia a trajetória profissional e acadêmica de pessoas que já passaram pelo GETECC e permite apresentar seu impacto para além do período de participação no grupo.</p>
+                      </section>
+                    </div>
+                  </section>
+
+                  {/* HISTÓRICO DE METAS */}
+                  {metasAnuais.length > 0 && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-4">
+                      <div><h2 className="text-sm font-black text-slate-800">Histórico de metas</h2><p className="mt-1 text-xs leading-4 text-slate-500">Acompanhamento anual da produção científica.</p></div>
+                      {temPermissao('producoes', 'editar') && <button onClick={() => { setFormMetaAnual({ ano: String(new Date().getFullYear() + 1), meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 }); setModalAtivo('cadastrarMeta'); }} className="rounded-lg border border-blue-200 bg-[#EAF4FB] px-3 py-2 text-xs font-black text-[#0072CE] hover:bg-blue-100">+ Cadastrar meta</button>}
+                    </div>
+                    <div className="overflow-x-auto"><table className="w-full border-collapse text-xs"><thead><tr className="bg-slate-50"><th className="border-b p-3 text-left">Ano</th><th className="border-b p-3">Artigos produzidos</th><th className="border-b p-3">Artigos publicados</th><th className="border-b p-3">Resumos</th><th className="border-b p-3">Ações</th></tr></thead><tbody>{[...metasAnuais].sort((a,b) => a.ano.localeCompare(b.ano)).map((m) => { const produzidos = producoes.filter((p) => (p.ano_producao || p.ano_publicacao) === m.ano && p.categoria_producao === 'Periódico').length; const publicados = producoes.filter((p) => p.ano_publicacao === m.ano && p.categoria_producao === 'Periódico' && ['Publicado','anais publicados'].includes(p.status)).length; const resumos = producoes.filter((p) => p.ano_publicacao === m.ano && p.categoria_producao === 'Congresso' && ['Publicado','anais publicados','Aprovado'].includes(p.status)).length; const progresso = (valor: number, meta: number) => Math.min(100, Math.round(valor / Math.max(1, meta) * 100)); return <tr key={m.ano} className="hover:bg-slate-50"><td className="border-b p-3 font-black">{m.ano}</td>{[[produzidos,m.meta_artigos_produzidos],[publicados,m.meta_artigos_publicados],[resumos,m.meta_resumos]].map(([valor,meta],i) => <td key={i} className="border-b p-3"><div className="text-center font-bold">{valor} / {meta}</div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#0072CE]" style={{width:`${progresso(Number(valor),Number(meta))}%`}} /></div><div className="mt-1 text-center text-[10px] text-slate-500">{progresso(Number(valor),Number(meta))}%</div></td>)}<td className="border-b p-3"><div className="flex flex-col gap-1"><button onClick={() => { setFormMetaAnual(m); setModalAtivo('cadastrarMeta'); }} className="rounded border px-2 py-1 font-bold text-slate-700 hover:bg-slate-100">Editar</button><button onClick={() => excluirMetaAnual(m)} className="rounded border border-red-200 px-2 py-1 font-bold text-red-700 hover:bg-red-50">Excluir</button></div></td></tr>; })}</tbody></table></div>
+                  </section>}
+                </div>
+              )}
+
+              {/* ABA 2: ACOMPANHAMENTO DE EGRESSOS DO GETECC */}
+              {moduloAtivo === 'egressos' && (
+                <div className="space-y-6">
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-6">
+                      <div className="min-w-0 border-l-4 border-[#DC2626] pl-4">
+                        <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#DC2626]">GETECC · Impacto social e profissional</p>
+                        <h1 className="break-words text-2xl font-black tracking-tight text-[#0F172A]">Egressos do GETECC</h1>
+                        <p className="mt-1 max-w-3xl break-words text-sm leading-5 text-slate-500">Acompanhamento da trajetória de pessoas que já integraram o grupo e hoje estão inseridas na formação, no trabalho e nos serviços de saúde.</p>
+                      </div>
+                      {temPermissao('egressos', 'editar') && <button onClick={() => { setFormEgresso({ trajetorias: [] }); setModalAtivo('egresso'); }} className="shrink-0 rounded-xl px-4 py-2.5 text-xs font-black shadow-sm transition-colors hover:opacity-90" style={{ backgroundColor: '#0072CE', color: '#FFFFFF' }}>+ Cadastrar egresso</button>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 bg-slate-50/70 p-4 md:grid-cols-4">
+                      {[
+                        { label: 'Egressos cadastrados', value: egressosGETECC.length, cor: 'text-[#0072CE]' },
+                        { label: 'Com trajetória registrada', value: egressosComAcompanhamento, cor: 'text-[#0F172A]' },
+                        { label: 'Instituições informadas', value: egressosInstituicoes, cor: 'text-[#DC2626]' },
+                        { label: 'Vínculos registrados', value: egressosPorAtuacao.reduce((s, x) => s + x.valor, 0), cor: 'text-[#0072CE]' },
+                      ].map((kpi) => <div key={kpi.label} className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.03)]"><div className="break-words text-[10px] font-black uppercase leading-4 tracking-wider text-slate-400">{kpi.label}</div><div className={`mt-1 text-3xl font-black tracking-tight ${kpi.cor}`}>{kpi.value}</div></div>)}
+                    </div>
+                  </section>
+
+                  <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                    <GraficoBarras titulo="Trajetória atual dos egressos" dados={egressosPorAtuacao} limite={11} />
+                    <GraficoCircular titulo="Distribuição das trajetórias" segmentos={egressosPorAtuacao.filter((x) => x.valor > 0)} />
+                  </section>
+
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                      <h2 className="text-sm font-black text-slate-800">Egressos cadastrados</h2>
+                      <span className="rounded-full bg-[#EAF4FB] px-3 py-1 text-[10px] font-black text-[#0072CE]">{egressosGETECC.length} registro(s)</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[1100px] border-collapse text-xs">
+                        <thead><tr className="bg-slate-50 text-left font-black text-slate-700"><th className="p-3">Egresso</th><th className="p-3">Curso</th><th className="p-3">Período no GETECC</th><th className="p-3">Trajetória atual</th><th className="p-3">Instituição / local</th><th className="p-3">Ações</th></tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {egressosGETECC.map((e) => <tr key={e.id} className="hover:bg-slate-50 align-top">
+                            <td className="max-w-[220px] p-3 font-black text-slate-900 break-words">{e.nome_completo}</td>
+                            <td className="max-w-[180px] p-3 break-words text-slate-600">{e.curso_formacao || 'Não informado'}</td>
+                            <td className="p-3 text-slate-600">{e.data_ingresso_getecc || '—'}<br />{e.data_saida_getecc ? `até ${e.data_saida_getecc}` : '—'}</td>
+                            <td className="max-w-[330px] p-3"><div className="flex flex-wrap gap-1.5">{(e.trajetorias || []).length ? e.trajetorias.map((a) => <span key={a} className="rounded-full border border-blue-100 bg-[#EAF4FB] px-2 py-1 text-[10px] font-bold text-[#0072CE]">{a}</span>) : <span className="text-slate-400">Não informada</span>}</div></td>
+                            <td className="max-w-[240px] p-3 break-words text-slate-600">{e.instituicao_atual || 'Não informado'}{e.cidade_uf_atual ? <span className="block text-[10px] text-slate-400">{e.cidade_uf_atual}</span> : null}</td>
+                            <td className="p-3"><div className="flex gap-1.5">{temPermissao('egressos', 'editar') && <><button onClick={() => { setFormEgresso(e); setModalAtivo('egresso'); }} className="rounded border border-slate-300 px-2 py-1 font-bold text-slate-700 hover:bg-slate-100">Editar</button><button onClick={() => excluirEgresso(e.id)} className="rounded border border-red-200 px-2 py-1 font-bold text-red-700 hover:bg-red-50">Excluir</button></>}</div></td>
+                          </tr>)}
+                          {!egressosGETECC.length && <tr><td colSpan={6} className="p-10 text-center text-xs font-semibold text-slate-400">Nenhum egresso do GETECC cadastrado.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-[#0072CE]/20 bg-[#EAF4FB] p-5">
+                    <h2 className="text-sm font-black text-[#0F172A]">Impacto do GETECC</h2>
+                    <p className="mt-2 max-w-4xl text-xs leading-5 text-slate-600">O acompanhamento dos ex-integrantes permite demonstrar a trajetória profissional e acadêmica das pessoas que passaram pelo grupo, evidenciando inserção em concursos, residências, pós-graduação, preceptoria, assistência e instituições de saúde.</p>
                   </section>
                 </div>
               )}
 
-              {moduloAtivo === 'painel' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Projetos por situação</h3>{(Object.entries(projetos.reduce((acc: Record<string, number>, p) => { const k = p.status || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([status,total]) => <div key={status} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={status}>{status}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className="h-full bg-violet-600" style={{width:`${total/Math.max(1,projetos.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!projetos.length && <p className="text-xs text-slate-500">Sem projetos cadastrados.</p>}</section>
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Demandas por situação</h3>{(Object.entries(demandas.reduce((acc: Record<string, number>, d) => { const k = d.status || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([status,total]) => <div key={status} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={status}>{status}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className={`h-full ${status === 'Concluída' ? 'bg-emerald-600' : 'bg-amber-500'}`} style={{width:`${total/Math.max(1,demandas.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!demandas.length && <p className="text-xs text-slate-500">Sem demandas cadastradas.</p>}</section>
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Demandas por prioridade</h3>{(['Urgente','Alta','Média','Baixa'] as const).map((prioridade) => { const total = demandas.filter((d) => d.prioridade === prioridade && d.status !== 'Concluída').length; const abertas = Math.max(1, demandas.filter((d) => d.status !== 'Concluída').length); const cor = prioridade === 'Urgente' ? 'bg-red-600' : prioridade === 'Alta' ? 'bg-orange-500' : prioridade === 'Média' ? 'bg-amber-500' : 'bg-sky-600'; return <div key={prioridade} className="grid grid-cols-[minmax(5rem,auto)_1fr_2rem] gap-2 items-center mb-3 text-xs"><span>{prioridade}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className={`h-full ${cor}`} style={{width:`${total/abertas*100}%`}} /></div><strong>{total}</strong></div>; })}{!demandas.filter((d) => d.status !== 'Concluída').length && <p className="text-xs text-slate-500">Não há demandas em aberto.</p>}</section>
-                  <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm"><h3 className="font-black text-sm mb-3">Produções por tipo</h3>{(Object.entries(producoes.reduce((acc: Record<string, number>, p) => { const k = p.categoria_producao || 'Não informado'; acc[k] = (acc[k] || 0) + 1; return acc; }, {})) as [string, number][]).sort((a,b) => b[1]-a[1]).map(([categoria,total]) => <div key={categoria} className="grid grid-cols-[minmax(6rem,auto)_1fr_2rem] gap-2 items-center mb-2 text-xs"><span className="truncate" title={categoria}>{categoria}</span><div className="h-4 rounded bg-slate-100 overflow-hidden"><div className="h-full bg-indigo-600" style={{width:`${total/Math.max(1,producoes.length)*100}%`}} /></div><strong>{total}</strong></div>)}{!producoes.length && <p className="text-xs text-slate-500">Sem produções cadastradas.</p>}</section>
-                </div>
-              )}
-
-              {moduloAtivo === 'painel' && metasAnuais.length > 0 && (
-                <section className="bg-white border border-slate-300 rounded-lg p-4 shadow-sm">
-                  <div className="flex flex-wrap justify-between gap-2 items-center mb-3"><h3 className="font-black text-sm">Histórico comparativo de metas anuais</h3><button onClick={() => { setFormMetaAnual({ ano: String(Math.max(new Date().getFullYear(), ...metasAnuais.map((m) => Number(m.ano) || 0)) + (metasAnuais.some((m) => Number(m.ano) >= new Date().getFullYear()) ? 1 : 0)), meta_artigos_produzidos: 10, meta_artigos_publicados: 6, meta_resumos: 10 }); setModalAtivo('cadastrarMeta'); }} className="print:hidden border rounded px-3 py-2 text-xs font-black">+ Cadastrar meta de outro ano</button></div>
-                  <div className="overflow-x-auto"><table className="w-full text-xs border-collapse"><thead><tr className="bg-slate-100"><th className="border p-2 text-left">Ano</th><th className="border p-2">Artigos produzidos</th><th className="border p-2">Artigos publicados</th><th className="border p-2">Resumos publicados/aprovados</th><th className="border p-2">Ações</th></tr></thead><tbody>{[...metasAnuais].sort((a,b) => a.ano.localeCompare(b.ano)).map((m) => { const produzidos = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Periódico').length; const publicados = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Periódico' && ['Publicado','anais publicados'].includes(p.status)).length; const resumos = producoes.filter(p => p.ano_publicacao === m.ano && p.categoria_producao === 'Congresso' && ['Publicado','anais publicados','Aprovado'].includes(p.status)).length; const progresso = (valor: number, meta: number) => Math.min(100, Math.round(valor / Math.max(1, meta) * 100)); return <tr key={m.ano}><td className="border p-2 font-black">{m.ano}</td><td className="border p-2"><div className="font-bold text-center">{produzidos} / {m.meta_artigos_produzidos}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-amber-500" style={{width:`${progresso(produzidos,m.meta_artigos_produzidos)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(produzidos,m.meta_artigos_produzidos)}%</div></td><td className="border p-2"><div className="font-bold text-center">{publicados} / {m.meta_artigos_publicados}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-emerald-600" style={{width:`${progresso(publicados,m.meta_artigos_publicados)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(publicados,m.meta_artigos_publicados)}%</div></td><td className="border p-2"><div className="font-bold text-center">{resumos} / {m.meta_resumos}</div><div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className="h-full bg-blue-600" style={{width:`${progresso(resumos,m.meta_resumos)}%`}} /></div><div className="text-[10px] text-center mt-1">{progresso(resumos,m.meta_resumos)}%</div></td><td className="border p-2"><div className="flex flex-col gap-1"><button onClick={() => { setFormMetaAnual(m); setModalAtivo('cadastrarMeta'); }} className="print:hidden border rounded px-2 py-1 text-slate-800">Editar</button><button onClick={() => excluirMetaAnual(m)} className="print:hidden border border-red-300 text-red-700 rounded px-2 py-1">Excluir</button></div></td></tr>; })}</tbody></table></div>
-                </section>
-              )}
-
-              {/* ABA 2: MEMBROS DO GETECC */}
+              {/* ABA 3: MEMBROS DO GETECC */}
               {moduloAtivo === 'membros' && (
                 <div className="space-y-6">
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
@@ -1930,7 +2261,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                       <p className="text-xs text-slate-900 font-bold mt-1">Cartões de perfis individuais e tabela/planilha unificada de cadastrados.</p>
                     </div>
                     {temPermissao('membros', 'editar') && (
-                      <button onClick={() => { setFormMembro({ situacao: 'Ativo', categoria: 'Pesquisadores', historico_afastamentos: [] }); setModalAtivo('membro'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
+                      <button onClick={() => { setFormMembro({ situacao: 'Ativo', categoria: 'Estudantes', selecao_ingresso: '', historico_afastamentos: [] }); setModalAtivo('membro'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
                         + Cadastrar Integrante
                       </button>
                     )}
@@ -1957,6 +2288,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                           <p><strong>Financiamento:</strong> {m.financiamento || 'Não se aplica'}</p>
                           <p><strong>Telefone / Instagram:</strong> {m.telefone || 'N/A'} | {m.instagram || 'N/A'}</p>
                           <p><strong>Ingresso:</strong> {m.data_ingresso} {m.data_desligamento && `| Desligamento: ${m.data_desligamento}`}</p>
+                          <p><strong>Seleção:</strong> {m.selecao_ingresso || 'Não informada'}</p>
                         </div>
 
                         <div className="flex justify-between items-center pt-2 border-t border-slate-300">
@@ -2004,6 +2336,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                             <th className="p-3">Categoria / Cargo</th>
                             <th className="p-3">Instituição</th>
                             <th className="p-3">Data Ingresso</th>
+                            <th className="p-3">Seleção</th>
                             <th className="p-3">Situação</th>
                             {temPermissao('membros', 'editar') && <th className="p-3 text-right">Ações</th>}
                           </tr>
@@ -2020,6 +2353,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                                 <td className="p-3 text-red-700">{mb.categoria} - {mb.funcao_cargo}</td>
                                 <td className="p-3">{mb.instituicao}</td>
                                 <td className="p-3 font-mono">{mb.data_ingresso}</td>
+                                <td className="p-3">{mb.selecao_ingresso || 'Não informada'}</td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
                                     mb.situacao === 'Ativo' ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'
@@ -2037,7 +2371,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={10} className="p-4 text-center text-slate-500 italic">Nenhum membro cadastrado.</td>
+                              <td colSpan={11} className="p-4 text-center text-slate-500 italic">Nenhum membro cadastrado.</td>
                             </tr>
                           )}
                         </tbody>
@@ -2190,7 +2524,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                   <div className="bg-white p-4 rounded-lg border border-slate-300 shadow-sm flex justify-between items-center">
                     <h1 className="text-lg font-black text-slate-900">Projetos de Pesquisa & Artigos Derivados</h1>
                     {temPermissao('projetos', 'editar') && (
-                      <button onClick={() => { setFormProjeto({ status: 'Em aberto', docentes: [], discentes: [], artigos_derivados: [], anexos: [] }); setFormDocentesTexto(''); setFormDiscentesTexto(''); setModalAtivo('projeto'); }} className="bg-red-100 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">+ Novo Projeto</button>
+                      <button onClick={() => { setFormProjeto({ status: 'Em aberto', is_nupex: false, docentes: [], discentes: [], artigos_derivados: [], anexos: [] }); setFormDocentesTexto(''); setFormDiscentesTexto(''); setModalAtivo('projeto'); }} className="bg-red-100 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">+ Novo Projeto</button>
                     )}
                   </div>
 
@@ -2198,8 +2532,11 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     {projetos.map((p) => (
                       <div key={p.id} className="bg-white p-5 rounded-lg border border-slate-300 shadow-sm space-y-3">
                         <div className="flex justify-between items-start">
-                          <h3 className="font-black text-slate-900 text-sm">{p.titulo}</h3>
-                          <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-200 text-[10px] font-black rounded">{p.status}</span>
+                          <div>
+                            <h3 className="font-black text-slate-900 text-sm">{p.titulo}</h3>
+                            <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[9px] font-black ${p.is_nupex ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{p.is_nupex ? 'NUPEX' : 'Projeto de pesquisa'}</span>
+                          </div>
+                          <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-100 text-[10px] font-black rounded">{p.status}</span>
                         </div>
 
                         <div className="text-xs space-y-1 font-bold text-slate-900">
@@ -2318,8 +2655,8 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     <div className="bg-white rounded-lg border border-slate-300 p-4 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black text-sm">Calendário mensal de demandas</h3><div className="flex items-center gap-2"><button type="button" onClick={() => setMesCalendarioDemandas(new Date(mesCalendarioDemandas.getFullYear(), mesCalendarioDemandas.getMonth() - 1, 1))} className="border rounded px-3 py-1 text-slate-900">‹</button><strong className="capitalize min-w-36 text-center">{nomeMesCalendario(mesCalendarioDemandas)}</strong><button type="button" onClick={() => setMesCalendarioDemandas(new Date(mesCalendarioDemandas.getFullYear(), mesCalendarioDemandas.getMonth() + 1, 1))} className="border rounded px-3 py-1 text-slate-900">›</button><button type="button" onClick={() => setMesCalendarioDemandas(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="border rounded px-2 py-1 text-xs text-slate-900">Hoje</button></div></div>
                       <div className="grid grid-cols-7 border-t border-l border-slate-300">{['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((dia) => <div key={dia} className="p-2 text-center text-xs font-black bg-slate-100 border-r border-b border-slate-300">{dia}</div>)}
-                        {diasCalendarioDemandas.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasOrdenadas.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioDemandas.getMonth(); return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0,3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.status === 'Concluída' ? 'bg-emerald-100 text-emerald-900' : d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-amber-100 text-amber-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <p className="text-[10px] font-bold text-slate-600">+{itens.length-3} demandas</p>}</div></div>; })}
-                      </div><p className="text-[11px] text-slate-600">As demandas aparecem no dia do prazo final. Verde: concluída; vermelho: prioridade urgente; amarelo: demais pendências.</p>
+                        {diasCalendarioDemandas.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasPendentes.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioDemandas.getMonth(); const expandido = diaCalendarioExpandido === `geral:${chave}`; return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0, expandido ? itens.length : 3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-amber-100 text-amber-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <button type="button" onClick={() => setDiaCalendarioExpandido(expandido ? null : `geral:${chave}`)} className="text-[10px] font-black text-blue-800 hover:underline rounded px-1 py-0.5 bg-blue-50">{expandido ? '− Mostrar menos' : `+ Ver todas (${itens.length})`}</button>}</div></div>; })}
+                      </div><p className="text-[11px] text-slate-600">O calendário exibe apenas demandas pendentes no dia do prazo final. Vermelho: prioridade urgente; amarelo: demais pendências. Use “+ Ver todas” para expandir os dias com mais de três demandas.</p>
                     </div>
                   ) : <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse">
@@ -2335,10 +2672,11 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {demandasOrdenadas.length > 0 ? (
-                          demandasOrdenadas.map((d) => {
+                          demandasOrdenadas.map((d, index) => {
+                            const separadorConcluidas = d.status === 'Concluída' && (index === 0 || demandasOrdenadas[index - 1]?.status !== 'Concluída');
                             const alerta = obterAlertaPrazoDemanda(d.prazo_final, d.status);
                             return (
-                              <tr key={d.id} className={d.status === 'Concluída' ? 'bg-slate-100 opacity-75' : 'hover:bg-slate-50'}>
+                              <React.Fragment key={d.id}>{separadorConcluidas && <tr><td colSpan={temPermissao('demandas', 'editar') ? 6 : 5} className="p-2 bg-slate-200 text-slate-700 font-black uppercase tracking-wide border-y border-slate-300">✓ Demandas concluídas — histórico</td></tr>}<tr className={d.status === 'Concluída' ? 'bg-slate-100 text-slate-500' : 'hover:bg-slate-50'}>
                                 <td className="p-3 font-bold text-slate-900">
                                   <span className="font-mono text-red-700 font-black">{d.codigo}</span> - {d.titulo}
                                   {d.descricao && <p className="text-[10px] text-slate-600 italic font-normal">{d.descricao}</p>}
@@ -2375,7 +2713,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                                     <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
                                   </td>
                                 )}
-                              </tr>
+                              </tr></React.Fragment>
                             );
                           })
                         ) : (
@@ -2432,8 +2770,8 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     <div className="bg-white rounded-lg border border-slate-300 p-4 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black text-sm">Calendário mensal — Demandas do Coração</h3><div className="flex items-center gap-2"><button type="button" onClick={() => setMesCalendarioCoracao(new Date(mesCalendarioCoracao.getFullYear(), mesCalendarioCoracao.getMonth() - 1, 1))} className="border rounded px-3 py-1 text-slate-900">‹</button><strong className="capitalize min-w-36 text-center">{nomeMesCalendario(mesCalendarioCoracao)}</strong><button type="button" onClick={() => setMesCalendarioCoracao(new Date(mesCalendarioCoracao.getFullYear(), mesCalendarioCoracao.getMonth() + 1, 1))} className="border rounded px-3 py-1 text-slate-900">›</button><button type="button" onClick={() => setMesCalendarioCoracao(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="border rounded px-2 py-1 text-xs text-slate-900">Hoje</button></div></div>
                       <div className="grid grid-cols-7 border-t border-l border-slate-300">{['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((dia) => <div key={dia} className="p-2 text-center text-xs font-black bg-red-50 border-r border-b border-slate-300">{dia}</div>)}
-                        {diasCalendarioCoracao.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasCoracaoOrdenadas.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioCoracao.getMonth(); return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0,3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.status === 'Concluída' ? 'bg-emerald-100 text-emerald-900' : d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-rose-100 text-rose-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <p className="text-[10px] font-bold text-slate-600">+{itens.length-3} demandas</p>}</div></div>; })}
-                      </div><p className="text-[11px] text-slate-600">As demandas aparecem no dia do prazo final. Verde: concluída; vermelho: prioridade urgente; rosa: demais pendências.</p>
+                        {diasCalendarioCoracao.map((dia) => { const chave = formatarDataCalendario(dia); const itens = demandasCoracaoPendentes.filter((d) => (d.prazo_final || '').slice(0,10) === chave); const mesmoMes = dia.getMonth() === mesCalendarioCoracao.getMonth(); const expandido = diaCalendarioExpandido === `coracao:${chave}`; return <div key={chave} className={`min-h-24 sm:min-h-28 p-1 border-r border-b border-slate-300 ${mesmoMes ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}><div className={`text-xs font-black mb-1 ${chave === formatarDataCalendario(new Date()) ? 'inline-flex rounded-full bg-red-700 text-white w-6 h-6 items-center justify-center' : ''}`}>{dia.getDate()}</div><div className="space-y-1">{itens.slice(0, expandido ? itens.length : 3).map((d) => <div key={d.id} title={`${d.titulo} · ${d.responsavel_nome || 'Sem responsável'}`} className={`rounded px-1 py-1 text-[10px] leading-tight break-words ${d.prioridade === 'Urgente' ? 'bg-red-100 text-red-900' : 'bg-rose-100 text-rose-900'}`}><span className="font-black">{d.codigo}</span> {d.titulo}</div>)}{itens.length > 3 && <button type="button" onClick={() => setDiaCalendarioExpandido(expandido ? null : `coracao:${chave}`)} className="text-[10px] font-black text-blue-800 hover:underline rounded px-1 py-0.5 bg-blue-50">{expandido ? '− Mostrar menos' : `+ Ver todas (${itens.length})`}</button>}</div></div>; })}
+                      </div><p className="text-[11px] text-slate-600">O calendário exibe apenas demandas pendentes no dia do prazo final. Vermelho: prioridade urgente; rosa: demais pendências. Use “+ Ver todas” para expandir os dias com mais de três demandas.</p>
                     </div>
                   ) : <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse">
@@ -2449,10 +2787,11 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {demandasCoracaoOrdenadas.length > 0 ? (
-                          demandasCoracaoOrdenadas.map((d) => {
+                          demandasCoracaoOrdenadas.map((d, index) => {
+                            const separadorConcluidas = d.status === 'Concluída' && (index === 0 || demandasCoracaoOrdenadas[index - 1]?.status !== 'Concluída');
                             const alerta = obterAlertaPrazoDemanda(d.prazo_final, d.status);
                             return (
-                              <tr key={d.id} className={d.status === 'Concluída' ? 'bg-slate-100 opacity-75' : 'hover:bg-red-50/50'}>
+                              <React.Fragment key={d.id}>{separadorConcluidas && <tr><td colSpan={temPermissao('coracao', 'editar') ? 6 : 5} className="p-2 bg-slate-200 text-slate-700 font-black uppercase tracking-wide border-y border-slate-300">✓ Demandas concluídas — histórico</td></tr>}<tr className={d.status === 'Concluída' ? 'bg-slate-100 text-slate-500' : 'hover:bg-red-50/50'}>
                                 <td className="p-3 font-bold text-slate-900">
                                   <span className="font-mono text-red-700 font-black">{d.codigo}</span> - {d.titulo}
                                   {d.descricao && <p className="text-[10px] text-slate-600 italic font-normal">{d.descricao}</p>}
@@ -2489,7 +2828,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                                     <button onClick={() => handleExcluir('demandas', d.id)} className="bg-red-100 text-red-700 font-black px-2 py-1 rounded border border-red-300">Excluir</button>
                                   </td>
                                 )}
-                              </tr>
+                              </tr></React.Fragment>
                             );
                           })
                         ) : (
@@ -2545,13 +2884,13 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                     </div>
                     {temPermissao('producoes', 'editar') && (
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => { setFormMetaAnual(metaAtual); setModalAtivo('cadastrarMeta'); }} className="bg-amber-100 text-amber-900 border border-amber-300 font-black text-xs px-3 py-2 rounded">
+                        <button onClick={() => { setFormMetaAnual(metaAtual); setModalAtivo('cadastrarMeta'); }} className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-700 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
                           ⚙️ Cadastrar Meta Anual
                         </button>
                         <button onClick={() => setModalAtivo('cargaMassaProducao')} className="bg-slate-200 hover:bg-slate-300 text-slate-900 border border-slate-400 font-black text-xs px-3 py-2 rounded">
                           📥 Importar Arquivo em Massa
                         </button>
-                        <button onClick={() => { setFormProducao({ categoria_producao: 'Periódico', status: 'Publicado', ano_publicacao: '2026' }); setModalAtivo('producao'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
+                        <button onClick={() => { setFormProducao({ categoria_producao: 'Periódico', status: 'Publicado', ano_producao: String(new Date().getFullYear()), ano_publicacao: String(new Date().getFullYear()) }); setModalAtivo('producao'); }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 font-black text-xs px-4 py-2 rounded">
                           + Cadastrar Produção
                         </button>
                       </div>
@@ -2590,7 +2929,8 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                             <th className="p-3">Título do Artigo</th>
                             <th className="p-3">Revista / Periódico</th>
                             <th className="p-3">Autor Principal & Coautores</th>
-                            <th className="p-3">Ano</th>
+                            <th className="p-3">Ano produção</th>
+                            <th className="p-3">Ano publicação</th>
                             <th className="p-3">Qualis / DOI</th>
                             <th className="p-3">Status</th>
                             {temPermissao('producoes', 'editar') && <th className="p-3 text-right">Ações</th>}
@@ -2605,6 +2945,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                                 <p><strong className="text-red-700">Autor:</strong> {p.autor_principal}</p>
                                 <p className="text-[10px] text-slate-900"><strong>Coautores:</strong> {p.coautores || 'Nenhum'}</p>
                               </td>
+                              <td className="p-3 font-mono font-black text-slate-900">{p.ano_producao || p.ano_publicacao}</td>
                               <td className="p-3 font-mono font-black text-slate-900">{p.ano_publicacao}</td>
                               <td className="p-3 font-mono font-bold text-slate-700">{p.qualis_doi}</td>
                               <td className="p-3">
@@ -2634,7 +2975,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                         <span>Resumos & Trabalhos em Congressos</span>
                       </h3>
                       {temPermissao('producoes', 'editar') && (
-                        <button onClick={() => { setFormProducao({ categoria_producao: 'Congresso', status: 'Publicado', ano_publicacao: '2026' }); setModalAtivo('producao'); }} className="bg-slate-200 text-slate-900 font-black text-xs px-3 py-1 rounded border border-slate-400">
+                        <button onClick={() => { setFormProducao({ categoria_producao: 'Congresso', status: 'Publicado', ano_producao: String(new Date().getFullYear()), ano_publicacao: String(new Date().getFullYear()) }); setModalAtivo('producao'); }} className="bg-slate-200 text-slate-900 font-black text-xs px-3 py-1 rounded border border-slate-400">
                           + Adicionar Trabalho
                         </button>
                       )}
@@ -2642,7 +2983,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
 
                     <div className="space-y-4">
                       {Object.keys(congressosAgrupados).length > 0 ? (
-                        Object.entries(congressosAgrupados).map(([eventoNome, listaProds], idx) => (
+                        (Object.entries(congressosAgrupados) as [string, ProducaoCientifica[]][]).map(([eventoNome, listaProds], idx) => (
                           <div key={idx} className="border rounded-lg bg-slate-50 p-4 space-y-2 border-slate-300">
                             <div className="flex justify-between items-center border-b pb-2">
                               <h4 className="font-black text-red-700 text-xs uppercase">📍 {eventoNome}</h4>
@@ -3321,7 +3662,9 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                             <th className="p-2.5">Título</th>
                             <th className="p-2.5">Revista</th>
                             <th className="p-2.5">Autor Principal</th>
-                            <th className="p-2.5">Ano</th>
+                            <th className="p-2.5">Coautores</th>
+                            <th className="p-2.5">Ano de produção</th>
+                            <th className="p-2.5">Ano de publicação</th>
                             <th className="p-2.5">Qualis/DOI</th>
                             <th className="p-2.5">Status</th>
                           </tr>
@@ -3332,6 +3675,8 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                               <td className="p-2.5 font-black text-slate-900">{art.titulo}</td>
                               <td className="p-2.5">{art.evento_ou_revista}</td>
                               <td className="p-2.5">{art.autor_principal}</td>
+                              <td className="p-2.5">{art.coautores || '—'}</td>
+                              <td className="p-2.5 font-mono">{art.ano_producao || art.ano_publicacao}</td>
                               <td className="p-2.5 font-mono">{art.ano_publicacao}</td>
                               <td className="p-2.5 font-mono">{art.qualis_doi}</td>
                               <td className="p-2.5 text-red-700">{art.status}</td>
@@ -3482,12 +3827,9 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 </div>
                 <div>
                   <label className="block mb-1">Categoria:</label>
-                  <select value={formMembro.categoria || 'Pesquisadores'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded">
+                  <select value={['Gestão','Apoio de Gestão','Estudantes','Egressos'].includes(formMembro.categoria || '') ? formMembro.categoria : 'Estudantes'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Gestão">Gestão</option>
                     <option value="Apoio de Gestão">Apoio de Gestão</option>
-                    <option value="Coordenação">Coordenação</option>
-                    <option value="Diretoria">Diretoria</option>
-                    <option value="Pesquisadores">Pesquisadores</option>
                     <option value="Estudantes">Estudantes</option>
                     <option value="Egressos">Egressos</option>
                   </select>
@@ -3499,6 +3841,10 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 <div>
                   <label className="block mb-1">Data de Ingresso:</label>
                   <input type="date" required value={formMembro.data_ingresso || ''} onChange={(e) => setFormMembro({ ...formMembro, data_ingresso: e.target.value })} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block mb-1">Seleção / Processo de Ingresso:</label>
+                  <input type="text" value={formMembro.selecao_ingresso || ''} onChange={(e) => setFormMembro({ ...formMembro, selecao_ingresso: e.target.value })} className="w-full border p-2 rounded" placeholder="Ex.: Seleção 2026.1" />
                 </div>
                 <div>
                   <label className="block mb-1">Situação:</label>
@@ -3519,6 +3865,40 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 border rounded text-slate-700">Cancelar</button>
                 <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Integrante</button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: EGRESSO DO GETECC */}
+      {modalAtivo === 'egresso' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="my-8 w-full max-w-3xl space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div><h2 className="text-lg font-black text-[#0F172A]">{formEgresso.id ? 'Editar egresso do GETECC' : 'Cadastrar egresso do GETECC'}</h2><p className="mt-1 text-xs text-slate-500">Registre a trajetória após o desligamento do grupo.</p></div>
+              <button type="button" onClick={() => setModalAtivo(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            <form onSubmit={salvarEgresso} className="space-y-4 text-xs font-bold text-slate-900">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label>Nome completo<input required value={formEgresso.nome_completo || ''} onChange={(e) => setFormEgresso({ ...formEgresso, nome_completo: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
+                <label>Curso<input value={formEgresso.curso_formacao || ''} onChange={(e) => setFormEgresso({ ...formEgresso, curso_formacao: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
+                <label>Instituição de formação<input value={formEgresso.instituicao_formacao || ''} onChange={(e) => setFormEgresso({ ...formEgresso, instituicao_formacao: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" placeholder="Ex.: UNIFACISA" /></label>
+                <label>Motivo da saída<input value={formEgresso.motivo_saida || ''} onChange={(e) => setFormEgresso({ ...formEgresso, motivo_saida: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" placeholder="Ex.: conclusão do curso" /></label>
+                <label>Entrada no GETECC<input type="date" value={formEgresso.data_ingresso_getecc || ''} onChange={(e) => setFormEgresso({ ...formEgresso, data_ingresso_getecc: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
+                <label>Saída do GETECC<input type="date" value={formEgresso.data_saida_getecc || ''} onChange={(e) => setFormEgresso({ ...formEgresso, data_saida_getecc: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-[#EAF4FB] p-4">
+                <p className="mb-3 text-xs font-black text-[#0F172A]">Trajetória atual</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {atuacoesEgressoOpcoes.map((atuacao) => { const marcado = (formEgresso.trajetorias || []).includes(atuacao); return <label key={atuacao} className="flex min-w-0 items-center gap-2 rounded-lg border border-white bg-white px-3 py-2.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={marcado} onChange={(ev) => { const atual = formEgresso.trajetorias || []; setFormEgresso({ ...formEgresso, trajetorias: ev.target.checked ? [...atual, atuacao] : atual.filter((x) => x !== atuacao) }); }} /><span className="break-words">{atuacao}</span></label>; })}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label>Instituição / local de atuação<input value={formEgresso.instituicao_atual || ''} onChange={(e) => setFormEgresso({ ...formEgresso, instituicao_atual: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" placeholder="Ex.: Hospital HELP, UFPB, Prefeitura..." /></label>
+                <label>Cidade / UF<input value={formEgresso.cidade_uf_atual || ''} onChange={(e) => setFormEgresso({ ...formEgresso, cidade_uf_atual: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" placeholder="Ex.: Campina Grande/PB" /></label>
+              </div>
+              <label>Observações<textarea rows={3} value={formEgresso.observacoes || ''} onChange={(e) => setFormEgresso({ ...formEgresso, observacoes: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setModalAtivo(null)} className="rounded-lg border px-4 py-2 text-slate-700">Cancelar</button><button type="submit" className="rounded-lg bg-[#0072CE] px-4 py-2 font-black text-white hover:bg-[#005EA8]">Salvar egresso</button></div>
             </form>
           </div>
         </div>
@@ -3911,6 +4291,13 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                   <input type="text" value={formProjeto.financiamento || ''} onChange={(e) => setFormProjeto({ ...formProjeto, financiamento: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
+                  <label className="block mb-1">Projeto NUPEX:</label>
+                  <select value={formProjeto.is_nupex ? 'Sim' : 'Não'} onChange={(e) => setFormProjeto({ ...formProjeto, is_nupex: e.target.value === 'Sim' })} className="w-full border p-2 rounded">
+                    <option value="Não">Não</option>
+                    <option value="Sim">Sim</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block mb-1">Status:</label>
                   <select value={formProjeto.status || 'Em aberto'} onChange={(e) => setFormProjeto({ ...formProjeto, status: e.target.value as any })} className="w-full border p-2 rounded">
                     <option value="Em aberto">Em aberto</option>
@@ -3970,7 +4357,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 <div>
                   <label className="block mb-1">Responsáveis (marque uma ou mais pessoas):</label>
                   <div className="w-full border border-slate-300 rounded p-2 max-h-40 overflow-y-auto space-y-2 bg-white">
-                    {Array.from(new Set(['Cosme', ...usuarios.filter((u) => u.situacao === 'Ativo').map((u) => u.nome_completo), ...separarResponsaveis(formDemanda.responsavel_nome || '')])).filter(Boolean).sort((a,b) => a.localeCompare(b, 'pt-BR')).map((nome) => {
+                    {Array.from(new Set([...usuarios.filter((u) => u.situacao === 'Ativo').map((u) => u.nome_completo), ...separarResponsaveis(formDemanda.responsavel_nome || '')])).filter(Boolean).sort((a,b) => a.localeCompare(b, 'pt-BR')).map((nome) => {
                       const selecionados = separarResponsaveis(formDemanda.responsavel_nome || '');
                       const marcado = selecionados.some((n) => normalizarNomeResponsavel(n) === normalizarNomeResponsavel(nome));
                       return <label key={nome} className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
@@ -4080,10 +4467,15 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                   <input type="text" value={formProducao.coautores || ''} onChange={(e) => setFormProducao({ ...formProducao, coautores: e.target.value })} className="w-full border p-2 rounded" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              {formProducao.categoria_producao === 'Periódico' && <p className="col-span-full rounded bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-900">O ano de produção é quando o artigo foi elaborado; o ano de publicação é quando saiu na revista. Eles podem ser diferentes.</p>}
+              <div className={`grid ${formProducao.categoria_producao === 'Periódico' ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
+                {formProducao.categoria_producao === 'Periódico' && <div>
+                  <label className="block mb-1">Ano de produção:</label>
+                  <input type="number" min="1900" max="2200" required value={formProducao.ano_producao || formProducao.ano_publicacao || '2026'} onChange={(e) => setFormProducao({ ...formProducao, ano_producao: e.target.value })} className="w-full border p-2 rounded" />
+                </div>}
                 <div>
-                  <label className="block mb-1">Ano:</label>
-                  <input type="text" required value={formProducao.ano_publicacao || '2026'} onChange={(e) => setFormProducao({ ...formProducao, ano_publicacao: e.target.value })} className="w-full border p-2 rounded" />
+                  <label className="block mb-1">{formProducao.categoria_producao === 'Congresso' ? 'Ano (produção/publicação):' : 'Ano de publicação:'}</label>
+                  <input type="number" min="1900" max="2200" required value={formProducao.ano_publicacao || '2026'} onChange={(e) => setFormProducao({ ...formProducao, ano_publicacao: e.target.value, ...(formProducao.categoria_producao === 'Congresso' ? { ano_producao: e.target.value } : {}) })} className="w-full border p-2 rounded" />
                 </div>
                 <div>
                   <label className="block mb-1">Qualis / DOI:</label>
@@ -4135,7 +4527,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
               </div>
               <div className="flex justify-end space-x-2 pt-2 border-t">
                 <button type="button" onClick={() => setModalAtivo(null)} className="px-3 py-1.5 border rounded">Cancelar</button>
-                <button type="submit" className="px-3 py-1.5 bg-amber-700 text-white font-black rounded hover:bg-amber-800">Salvar Meta</button>
+                <button type="submit" className="inline-flex min-h-10 items-center justify-center rounded-lg border border-blue-800 bg-blue-700 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2">Salvar Meta</button>
               </div>
             </form>
           </div>
@@ -4170,7 +4562,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 required
                 value={textoCargaMassaProducao}
                 onChange={(e) => setTextoCargaMassaProducao(e.target.value)}
-                placeholder="Categoria ; Tipo ; Título ; Evento ou Revista ; Autor Principal ; Coautores ; Ano ; Qualis/DOI ; Status"
+                placeholder="Categoria ; Tipo ; Título ; Evento ou Revista ; Autor Principal ; Coautores ; Ano de produção ; Ano de publicação ; Qualis/DOI ; Status"
                 className="w-full border p-2 rounded text-xs font-mono font-bold text-slate-900"
               />
               <div className="flex justify-between items-center">
