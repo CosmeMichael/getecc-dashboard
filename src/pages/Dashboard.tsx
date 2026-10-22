@@ -37,9 +37,6 @@ export interface Membro {
   curso_formacao: string;
   instituicao: string;
   selecao_ingresso?: string;
-  atuacoes_egresso?: string[];
-  instituicao_egresso?: string;
-  observacoes_egresso?: string;
   categoria: 'Gestão' | 'Apoio de Gestão' | 'Estudantes' | 'Egressos';
   funcao_cargo: string;
   data_ingresso: string;
@@ -885,9 +882,6 @@ export default function Dashboard() {
       curso_formacao: formMembro.curso_formacao || '',
       instituicao: formMembro.instituicao || '',
       selecao_ingresso: formMembro.selecao_ingresso || '',
-      atuacoes_egresso: formMembro.atuacoes_egresso || [],
-      instituicao_egresso: formMembro.instituicao_egresso || '',
-      observacoes_egresso: formMembro.observacoes_egresso || '',
       categoria: formMembro.categoria || 'Estudantes',
       funcao_cargo: formMembro.funcao_cargo || '',
       data_ingresso: formMembro.data_ingresso || new Date().toISOString().split('T')[0],
