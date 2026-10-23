@@ -702,17 +702,23 @@ export default function Dashboard() {
       const metadata = (user?.user_metadata || {}) as Record<string, unknown>;
       const nomesMetadata = [metadata.nome_completo, metadata.full_name, metadata.name, metadata.nome, metadata.display_name, metadata.user_name, metadata.preferred_username]
         .filter((v): v is string => typeof v === 'string' && !!v.trim());
+      // Resolve o usuário autenticado de forma determinística: primeiro pelo ID do Supabase Auth,
+      // depois pelo e-mail e somente então pelos metadados. Isso impede que um funcionário seja
+      // confundido com o cadastro administrativo do Cosme.
+      const usuarioPorId = user?.id ? usuarios.find((u) => u.id === user.id) : undefined;
       const usuarioPorEmail = email ? usuarios.find((u) => (u.email || '').trim().toLocaleLowerCase('pt-BR') === email) : undefined;
       const usuarioPorNome = nomesMetadata.map((nome) => usuarios.find((u) => normalizarNomeResponsavel(u.nome_completo) === normalizarNomeResponsavel(nome))).find(Boolean);
-      const usuarioResolvido = usuarioPorEmail || usuarioPorNome;
+      const usuarioResolvido = usuarioPorId || usuarioPorEmail || usuarioPorNome;
       const nomePerfil = usuarioResolvido?.nome_completo || nomesMetadata[0] || '';
-      const identidadesBase = [usuarioResolvido?.nome_completo, ...nomesMetadata, email, email.includes('@') ? email.split('@')[0] : ''];
-      // Compatibilidade legada estritamente limitada à conta identificada como Cosme.
-      // Nunca atribuir a identidade “Cosme/Sistema” a outros administradores ou usuários sem perfil resolvido.
-      const identidadeCosme = /cosme/i.test(`${nomePerfil} ${email} ${nomesMetadata.join(' ')}`);
-      if (identidadeCosme) identidadesBase.push('Cosme', 'Sistema', 'sistema');
-      const identidades = identidadesBase.filter((v): v is string => typeof v === 'string' && !!v.trim());
-      setIdentidadesUsuarioLogado(Array.from(new Set(identidades)));
+      const identidadeCosme = /cosme/i.test(`${nomePerfil} ${email}`);
+
+      // Para o filtro “Atribuídas a mim”, usamos apenas a identidade canônica do usuário atual.
+      // Aliases legados “Cosme/Sistema” são adicionados SOMENTE quando a conta autenticada é realmente
+      // a conta do Cosme; funcionários nunca herdam essas identidades.
+      const identidadesBase = [usuarioResolvido?.nome_completo].filter((v): v is string => typeof v === 'string' && !!v.trim());
+      if (identidadeCosme) identidadesBase.push('Cosme', 'Cosme', 'Sistema', 'sistema');
+      const identidades = Array.from(new Set(identidadesBase));
+      setIdentidadesUsuarioLogado(identidades);
       setUsuarioLogado(usuarioResolvido || null);
     };
     carregarUsuarioAtual();
@@ -728,10 +734,22 @@ export default function Dashboard() {
     return usuarioLogado.permissoes?.[abaKey]?.[acao] ?? false;
   };
 
+  const nomeUsuarioAtual = () => {
+    // A conta administrativa do sistema pertence ao Cosme.
+    // Priorizamos essa identificação antes do nome salvo no cadastro de usuários,
+    // evitando que um cadastro legado chamado "Sistema" seja gravado como autor.
+    const identidadeCosme = identidadesUsuarioLogado.some((x) => /cosme/i.test(x));
+    if (identidadeCosme) return 'Cosme';
+    if (usuarioLogado?.nome_completo?.trim() && !/^sistema$/i.test(usuarioLogado.nome_completo.trim())) {
+      return usuarioLogado.nome_completo.trim();
+    }
+    return 'Usuário autenticado';
+  };
+
   const registrarAuditoria = async (operacao: string, modulo: string, detalhes: string) => {
     const item: ItemAuditoria = {
       id: String(Date.now()),
-      usuario_nome: usuarioLogado?.nome_completo || 'Sistema',
+      usuario_nome: nomeUsuarioAtual(),
       operacao,
       modulo,
       detalhes,
@@ -754,13 +772,15 @@ export default function Dashboard() {
 
   const obterAlertaPrazoDemanda = (prazoFinal: string, status: string) => {
     if (status === 'Concluída') return null;
+    // Datas de prazo são armazenadas como YYYY-MM-DD. Não usamos new Date('YYYY-MM-DD')
+    // diretamente porque o JavaScript interpreta esse formato como UTC e, no Brasil,
+    // isso pode deslocar a data para o dia anterior. Aqui comparamos apenas as datas,
+    // sem horário e sem conversão de fuso.
     const hoje = new Date();
-    hoje.setHours(0,0,0,0);
-    const prazo = new Date(prazoFinal);
-    prazo.setHours(0,0,0,0);
-
-    const diffTempo = prazo.getTime() - hoje.getTime();
-    const diffDias = Math.ceil(diffTempo / (1000 * 60 * 60 * 24));
+    const hojeUtc = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const [ano, mes, dia] = prazoFinal.slice(0, 10).split('-').map(Number);
+    const prazoUtc = Date.UTC(ano, mes - 1, dia);
+    const diffDias = Math.round((prazoUtc - hojeUtc) / (1000 * 60 * 60 * 24));
 
     if (diffDias < 0) {
       return { tipo: 'vencida', texto: `🚨 Vencida há ${Math.abs(diffDias)} dia(s)!`, cor: 'bg-red-50 text-red-800 border border-red-200' };
@@ -780,8 +800,8 @@ export default function Dashboard() {
       titulo: formDemanda.titulo || '',
       descricao: formDemanda.descricao || '',
       responsavel_nome: formDemanda.responsavel_nome || '',
-      cadastrado_por: formDemanda.cadastrado_por || usuarioLogado?.nome_completo || 'Cosme',
-      concluido_por: formDemanda.status === 'Concluída' ? (formDemanda.concluido_por || usuarioLogado?.nome_completo || 'Sistema') : undefined,
+      cadastrado_por: formDemanda.cadastrado_por || nomeUsuarioAtual(),
+      concluido_por: formDemanda.status === 'Concluída' ? (formDemanda.concluido_por || nomeUsuarioAtual()) : undefined,
       eh_coracao: formDemanda.eh_coracao || false,
       prazo_final: formDemanda.prazo_final || new Date().toISOString().split('T')[0],
       prioridade: formDemanda.prioridade || 'Média',
@@ -809,13 +829,13 @@ export default function Dashboard() {
     const dAtualizada: Demanda = {
       ...d,
       status: 'Concluída',
-      concluido_por: usuarioLogado?.nome_completo || 'Sistema',
+      concluido_por: nomeUsuarioAtual(),
     };
     try {
       const { error } = await supabase.from('demandas').upsert(dAtualizada);
       if (error) throw error;
       setDemandas(demandas.map((item) => (item.id === d.id ? dAtualizada : item)));
-      registrarAuditoria('Conclusão Demanda', 'Demandas', `Demanda ${d.codigo} concluída por ${usuarioLogado?.nome_completo || 'Sistema'}`);
+      registrarAuditoria('Conclusão Demanda', 'Demandas', `Demanda ${d.codigo} concluída por ${nomeUsuarioAtual()}`);
     } catch (err: any) {
       alert(`Erro ao atualizar demanda: ${err.message || err}`);
     }
@@ -1839,11 +1859,10 @@ const adicionarArtigoDerivadoNoProjeto = () => {
   const separarResponsaveis = (valor: string) => (valor || '').split(/[,;\n|]+/).map((n) => n.trim()).filter(Boolean);
   const responsavelIncluiUsuario = (responsaveis: string, identidades: string[] = []) => {
     const atribuicoes = separarResponsaveis(responsaveis).map(normalizarNomeResponsavel).filter(Boolean);
-    const textoAtribuicoes = ` ${normalizarNomeResponsavel(responsaveis)} `;
     const nomesPossiveis = identidades.map(normalizarNomeResponsavel).filter((nome) => nome.length >= 3);
-    // Primeiro tenta correspondência exata por responsável; depois aceita o nome como parte de um campo legado
-    // que tenha sido salvo com função, e-mail ou separador diferente.
-    return nomesPossiveis.some((nome) => atribuicoes.includes(nome) || textoAtribuicoes.includes(` ${nome} `));
+    // O filtro deve ser individual: só considera uma demanda “minha” quando um dos responsáveis
+    // coincide exatamente com uma identidade do usuário autenticado.
+    return nomesPossiveis.some((nome) => atribuicoes.includes(nome));
   };
 
   const demandasGerais = demandas.filter((d) => !d.eh_coracao);
@@ -2097,7 +2116,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                             <div className="min-w-0 rounded-lg border border-blue-100 bg-[#EAF4FB] px-2 py-3"><div className="text-[10px] font-black uppercase tracking-wide text-[#0072CE]">{m.done}</div><div className="mt-1 text-xl font-black text-[#0072CE]">{m.value}</div></div>
                             <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2 py-3"><div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Faltam</div><div className="mt-1 text-xl font-black text-slate-900">{Math.max(0, m.meta - m.value)}</div></div>
                           </div>
-                          <div className="mt-4 h-3 w-full overflow-hidden rounded-full border border-slate-200 bg-[#E5E7EB]" aria-label={`${m.pct}% da meta atingida`}><div className="h-full rounded-full transition-all duration-500" style={{ width: `${m.pct}%`, backgroundColor: '#0072CE', minWidth: m.pct > 0 ? '6px' : '0px' }} /></div>
+                          <div className="mt-4 h-3 w-full overflow-hidden rounded-full border border-slate-200 bg-slate-200" aria-label={`${m.pct}% da meta atingida`}><div className="h-full rounded-full transition-all duration-500" style={{ width: `${m.pct}%`, backgroundColor: '#0072CE', minWidth: m.pct > 0 ? '6px' : '0px' }} /></div>
                         </div>
                       ))}
                     </div>
@@ -3821,7 +3840,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 </div>
                 <div>
                   <label className="block mb-1">Categoria:</label>
-                  <select value={['Gestão','Apoio de Gestão','Estudantes','Egressos'].includes(formMembro.categoria || '') ? formMembro.categoria : 'Estudantes'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as any })} className="w-full border p-2 rounded">
+                  <select value={['Gestão','Apoio de Gestão','Estudantes','Egressos'].includes(formMembro.categoria || '') ? formMembro.categoria : 'Estudantes'} onChange={(e) => setFormMembro({ ...formMembro, categoria: e.target.value as Membro['categoria'] })} className="w-full border p-2 rounded bg-white text-slate-900">
                     <option value="Gestão">Gestão</option>
                     <option value="Apoio de Gestão">Apoio de Gestão</option>
                     <option value="Estudantes">Estudantes</option>
@@ -3857,7 +3876,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
 
               <div className="flex justify-end space-x-2 pt-3 border-t">
                 <button type="button" onClick={() => setModalAtivo(null)} className="px-4 py-2 border rounded text-slate-700">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-red-700 text-white font-black rounded hover:bg-red-800">Salvar Integrante</button>
+                <button type="submit" style={{ backgroundColor: '#DC2626', color: '#FFFFFF' }} className="px-4 py-2 font-black rounded hover:opacity-90">Salvar Integrante</button>
               </div>
             </form>
           </div>
@@ -3892,7 +3911,7 @@ const adicionarArtigoDerivadoNoProjeto = () => {
                 <label>Cidade / UF<input value={formEgresso.cidade_uf_atual || ''} onChange={(e) => setFormEgresso({ ...formEgresso, cidade_uf_atual: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" placeholder="Ex.: Campina Grande/PB" /></label>
               </div>
               <label>Observações<textarea rows={3} value={formEgresso.observacoes || ''} onChange={(e) => setFormEgresso({ ...formEgresso, observacoes: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5" /></label>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setModalAtivo(null)} className="rounded-lg border px-4 py-2 text-slate-700">Cancelar</button><button type="submit" className="rounded-lg bg-[#0072CE] px-4 py-2 font-black text-white hover:bg-[#005EA8]">Salvar egresso</button></div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => setModalAtivo(null)} className="rounded-lg border px-4 py-2 text-slate-700">Cancelar</button><button type="submit" style={{ backgroundColor: '#0072CE', color: '#FFFFFF', borderColor: '#0072CE' }} className="rounded-lg border px-4 py-2 font-black shadow-sm hover:opacity-90">Salvar egresso</button></div>
             </form>
           </div>
         </div>
